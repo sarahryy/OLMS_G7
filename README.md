@@ -235,9 +235,9 @@ committed, Git history preserves it.
 
 ### 10.1 Branches
 
-| Branch | Purpose | Rules |
+ Branch | Purpose | Rules |
 |--------|---------|-------|
-| main | Stable, working code | Protected. No direct pushes. Pull request with 1 approval required. |
-| feature/<name> | New functionality | feature/product-search |
-| fix/<name> | Bug fixes | fix/cart-total-calculation |
-| docs/<name> |
+| main | Stable, working code only | Protected. No direct pushes. Pull request with 1 approval required. |
+| feature/<name> | New functionality | Branched from main. Example:feature/product-search |
+| fix/<name> | Defect correction | Branched from main. Example: fix/cart-total-calculation |
+| docs/<name> | Documentation changes only | Branched from main. Example: docs/lab2-report |
