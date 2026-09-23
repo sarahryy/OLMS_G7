@@ -194,19 +194,19 @@ committed, Git history preserves it.
 ## 8. Folder Structure
 
     /src
-      /config          → db-config.php (database connection)
-      /css             → stylesheets
-      /js              → client-side scripts
-      /includes        → header.php, footer.php, shared components
-      /services        → data access and business logic
-      /utils           → shared helper functions
-      /pages           → product-list.php, cart.php, checkout.php
-      /assets          → images and icons
+      /config   db-config.php (database connection)
+      /css     stylesheets
+      /js       client-side scripts
+      /includes    header.php, footer.php, shared components
+      /services    data access and business logic
+      /utils        shared helper functions
+      /pages      product-list.php, cart.php, checkout.php
+      /assets    images and icons
     /docs
-      /diagrams        → use case and class diagrams
-      /database        → schema and seed SQL
-      /reports         → lab report PDFs
-    /tests             → unit tests
+      /diagrams      use case and class diagrams
+      /database      schema and seed SQL
+      /reports         lab report PDFs
+    /tests            unit tests
     README.md
     .gitignore
 
