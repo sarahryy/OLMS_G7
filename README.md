@@ -137,12 +137,12 @@ Agreed vocabulary — all members use these terms exactly.
 | Concept | Use this | Never use |
 |---------|----------|-----------|
 | Product identifier | productId | prodID, pID, itemId |
-| Product name | productName | name, title, barang |
-| Category | category | type, group, jenis |
-| Stock quantity | quantity | qty, stock, amount |
-| Customer | customer | user, buyer, client |
-| Admin | admin | staff, employee, manager |
-| Order line | orderItem | cartItem, lineItem, detail |
+| Product name | productName | name, title |
+| Category | category | type, group |
+| Stock quantity | quantity | qty, stock |
+| Customer | customer | user, buyer|
+| Admin | admin | staff, employee|
+| Order line | orderItem | cartItem, lineItem |
 | Price per unit | unitPrice | price (reserved for Product only) |
 | Line total | subtotal | total, lineTotal |
 | Order total | totalAmount | total, grandTotal |
@@ -218,15 +218,14 @@ committed, Git history preserves it.
 2. Clone the repository into the WAMP web root:
 
        cd C:\wamp64\www
-       git clone https://github.com/[username]/[repo-name].git
+       git clone https://github.com/sarahryy/OLMS_G7.git
 
 3. Open phpMyAdmin at http://localhost/phpmyadmin
-4. Create a database named stationerymart_db
-5. Import /docs/database/stationerymart_db.sql
-6. Copy db-config.example.php to db-config.php in /src/config/ and
-   enter your local MySQL credentials.
-7. Open http://localhost/[repo-name]/src/pages/index.php
-
+4. Create a database named `olms_g7`
+5. Import /docs/database/olms_g7.sql
+6. Copy db-config.example.php to db-config.php in /src/config/
+   and enter your local MySQL credentials.
+7. Open http://localhost/OLMS_G7/src/pages/index.php
 > db-config.php is listed in .gitignore and must never be committed.
 > Only db-config.example.php is tracked.
 
