@@ -1,4 +1,4 @@
-# StationeryMart — Online Local Mart System (OLMS)
+# StationeryMart Online Local Mart System (OLMS)
 
 **CSEB5223 Software Construction & Methods**
 Semester 1, 2026/2027 · Universiti Tenaga Nasional
