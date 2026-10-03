@@ -7,6 +7,7 @@
  *              functions are separated from display logic.
  * Author: Siti Sarah Raihanah Binti Azizan
  * Created: 03/10/2026
+ * Last Modified: 04/10/2026
  */
 
 require_once __DIR__ . '/../config/db-config.php';
@@ -61,15 +62,119 @@ function createProduct($product)
 }
 
 /**
+ * Builds a Product object from a database result row.
+ *
+ * Shared by every function that reads product records so that the mapping
+ * from table columns to object attributes is defined in one place only.
+ *
+ * @param array $row Associative array of one row from the products table
+ * @return Product Product instance populated from the row
+ */
+function buildProductFromRow($row)
+{
+    return new Product(
+        $row['product_id'],
+        $row['product_name'],
+        $row['description'],
+        $row['price'],
+        $row['stock_quantity'],
+        $row['brand'],
+        $row['category_id'],
+        $row['image_url']
+    );
+}
+
+/**
+ * Retrieves all products in the catalogue.
+ *
+ * @return array List of Product objects; empty array if none found
+ */
+function getAllProducts()
+{
+    $conn = getConnection();
+
+    $sql = "SELECT product_id, product_name, description, price,
+                   stock_quantity, brand, category_id, image_url
+            FROM products
+            ORDER BY product_name";
+
+    $result   = $conn->query($sql);
+    $products = [];
+
+    while ($row = $result->fetch_assoc()) {
+        $products[] = buildProductFromRow($row);
+    }
+
+    $conn->close();
+    return $products;
+}
+
+/**
  * Searches the catalogue by product name or category.
  *
+ * An empty keyword matches every product name. A category of "all" or an
+ * empty string disables the category filter.
+ *
  * @param string $keyword  Search term entered by the customer
- * @param string $category Category filter, or "all"
+ * @param string $category Category identifier to filter by, or "all"
  * @return array Matching products; empty array if none found
  */
 function searchProducts($keyword, $category)
 {
-    // TODO: implement in Lab 3
+    $conn = getConnection();
+
+    // Wildcards around the keyword so partial product names match
+    $namePattern = '%' . $keyword . '%';
+
+    // 0 means "no category filter"; the OR then short-circuits the condition
+    $categoryFilter = ($category === 'all' || $category === '') ? 0 : (int)$category;
+
+    $sql = "SELECT product_id, product_name, description, price,
+                   stock_quantity, brand, category_id, image_url
+            FROM products
+            WHERE product_name LIKE ?
+              AND (? = 0 OR category_id = ?)
+            ORDER BY product_name";
+
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('sii', $namePattern, $categoryFilter, $categoryFilter);
+    $stmt->execute();
+
+    $result   = $stmt->get_result();
+    $products = [];
+
+    while ($row = $result->fetch_assoc()) {
+        $products[] = buildProductFromRow($row);
+    }
+
+    $stmt->close();
+    $conn->close();
+    return $products;
+}
+
+/**
+ * Retrieves all category names keyed by their identifier.
+ *
+ * Used by display pages to show a readable category name instead of the
+ * numeric foreign key stored on each product.
+ *
+ * @return array Map of category_id => category_name
+ */
+function getCategoryNames()
+{
+    $conn = getConnection();
+
+    $result     = $conn->query("SELECT category_id, category_name
+                                FROM categories
+                                ORDER BY category_name");
+    $categories = [];
+
+    while ($row = $result->fetch_assoc()) {
+        $categories[$row['category_id']] = $row['category_name'];
+    }
+
+    $conn->close();
+    return $categories;
 }
 
 /**
@@ -103,14 +208,4 @@ function updateProduct($product)
 function deleteProduct($productId)
 {
     // TODO: implement in Lab 4
-}
-
-/**
- * Retrieves all products in the catalogue.
- *
- * @return array List of Product objects; empty array if none found
- */
-function getAllProducts()
-{
-    // TODO: implement in Lab 3
 }

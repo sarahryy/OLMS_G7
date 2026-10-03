@@ -1,0 +1,287 @@
+/**
+ * File: main-style.css
+ * Module: Shared Presentation
+ * Description: Shared stylesheet for all StationeryMart (OLMS) pages.
+ *              Covers layout, forms, buttons, tables and status messages.
+ * Author: Siti Sarah Raihanah Binti Azizan
+ * Created: 02/10/2026
+ * Last Modified: 02/10/2026
+ */
+
+/* ===== Base ===== */
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    color: #222222;
+    background-color: #f4f5f7;
+}
+
+/* ===== Page Layout ===== */
+
+.page-container {
+    max-width: 960px;
+    margin: 24px auto;
+    padding: 24px 28px;
+    background-color: #ffffff;
+    border: 1px solid #d8dbe0;
+    border-radius: 6px;
+}
+
+.page-title {
+    margin: 0 0 4px 0;
+    font-size: 22px;
+    color: #1a3d6d;
+}
+
+.page-subtitle {
+    margin: 0 0 20px 0;
+    font-size: 14px;
+    color: #666666;
+}
+
+/* ===== Navigation Bar ===== */
+
+.nav-bar {
+    background-color: #1a3d6d;
+    padding: 12px 28px;
+}
+
+.nav-brand {
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: bold;
+    margin-right: 28px;
+}
+
+.nav-link {
+    color: #d6e2f2;
+    text-decoration: none;
+    margin-right: 18px;
+    font-size: 14px;
+}
+
+.nav-link:hover {
+    color: #ffffff;
+    text-decoration: underline;
+}
+
+/* ===== Forms ===== */
+
+.form-group {
+    margin-bottom: 14px;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 14px;
+    font-family: inherit;
+    border: 1px solid #b9bec7;
+    border-radius: 4px;
+    background-color: #ffffff;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+    outline: none;
+    border-color: #1a3d6d;
+}
+
+.form-textarea {
+    min-height: 70px;
+    resize: vertical;
+}
+
+.form-hint {
+    font-size: 12px;
+    color: #777777;
+}
+
+/* Inline search bar: input and button side by side */
+.search-bar {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+
+.search-bar .form-input,
+.search-bar .form-select {
+    width: auto;
+    flex: 1 1 200px;
+}
+
+/* ===== Buttons ===== */
+
+.btn {
+    display: inline-block;
+    padding: 8px 18px;
+    font-size: 14px;
+    font-family: inherit;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.btn-primary {
+    background-color: #1a3d6d;
+    color: #ffffff;
+}
+
+.btn-primary:hover {
+    background-color: #14304f;
+}
+
+.btn-secondary {
+    background-color: #e3e6ea;
+    color: #222222;
+}
+
+.btn-secondary:hover {
+    background-color: #d2d6dc;
+}
+
+.btn-danger {
+    background-color: #a62828;
+    color: #ffffff;
+}
+
+.btn-danger:hover {
+    background-color: #851f1f;
+}
+
+.btn-small {
+    padding: 4px 12px;
+    font-size: 13px;
+}
+
+/* ===== Data Table ===== */
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 14px;
+}
+
+.data-table th {
+    background-color: #1a3d6d;
+    color: #ffffff;
+    text-align: left;
+    padding: 10px;
+    font-weight: bold;
+}
+
+.data-table td {
+    padding: 9px 10px;
+    border-bottom: 1px solid #e1e4e8;
+}
+
+.data-table tr:nth-child(even) td {
+    background-color: #f8f9fa;
+}
+
+.data-table tr:hover td {
+    background-color: #eef3fa;
+}
+
+.text-right {
+    text-align: right;
+}
+
+/* ===== Status Messages ===== */
+
+.message-success {
+    padding: 11px 14px;
+    margin-bottom: 16px;
+    border-radius: 4px;
+    background-color: #e4f3e7;
+    border-left: 4px solid #2e7d3a;
+    color: #1d5526;
+}
+
+.message-error {
+    padding: 11px 14px;
+    margin-bottom: 16px;
+    border-radius: 4px;
+    background-color: #fae9e9;
+    border-left: 4px solid #a62828;
+    color: #7d1f1f;
+}
+
+.message-info {
+    padding: 11px 14px;
+    margin-bottom: 16px;
+    border-radius: 4px;
+    background-color: #e8eef7;
+    border-left: 4px solid #1a3d6d;
+    color: #16365c;
+}
+
+/* Shown when a search returns no matching records */
+.no-results {
+    padding: 28px;
+    text-align: center;
+    color: #666666;
+    background-color: #f8f9fa;
+    border: 1px dashed #c4c9d0;
+    border-radius: 4px;
+}
+
+/* ===== Confirmation Panel (delete) ===== */
+
+.confirm-panel {
+    padding: 16px 18px;
+    margin-bottom: 16px;
+    background-color: #fdf6e4;
+    border: 1px solid #e0c97d;
+    border-radius: 4px;
+}
+
+.confirm-title {
+    margin: 0 0 10px 0;
+    font-size: 16px;
+    color: #7a5c0b;
+}
+
+.detail-row {
+    padding: 5px 0;
+    border-bottom: 1px solid #ece4cd;
+    font-size: 14px;
+}
+
+.detail-label {
+    display: inline-block;
+    width: 150px;
+    font-weight: bold;
+}
+
+/* ===== Footer ===== */
+
+.page-footer {
+    max-width: 960px;
+    margin: 0 auto 28px auto;
+    padding: 0 28px;
+    font-size: 12px;
+    color: #888888;
+    text-align: center;
+}
