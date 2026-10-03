@@ -18,15 +18,18 @@ require_once __DIR__ . '/../classes/Product.php';
  * @param Product $product Product instance to persist
  * @return int The newly assigned product ID, or 0 on failure
  */
-/**
- * Inserts a new product into the database.
- *
- * @param Product $product Product instance to persist
- * @return int The newly assigned product ID, or 0 on failure
- */
 function createProduct($product)
 {
     $conn = getConnection();
+
+    // Store values in variables so bind_param can reference them
+    $productName   = $product->getProductName();
+    $description   = $product->getDescription();
+    $price         = $product->getPrice();
+    $stockQuantity = $product->getStockQuantity();
+    $brand         = $product->getBrand();
+    $categoryId    = $product->getCategoryId();
+    $imageUrl      = $product->getImageUrl();
 
     $sql  = "INSERT INTO products
              (product_name, description, price, stock_quantity,
@@ -36,13 +39,13 @@ function createProduct($product)
     $stmt = $conn->prepare($sql);
     $stmt->bind_param(
         'ssdisss',
-        $product->getProductName(),
-        $product->getDescription(),
-        $product->getPrice(),
-        $product->getStockQuantity(),
-        $product->getBrand(),
-        $product->getCategoryId(),
-        $product->getImageUrl()
+        $productName,
+        $description,
+        $price,
+        $stockQuantity,
+        $brand,
+        $categoryId,
+        $imageUrl
     );
 
     if ($stmt->execute()) {
@@ -56,6 +59,7 @@ function createProduct($product)
     $conn->close();
     return 0;
 }
+
 /**
  * Searches the catalogue by product name or category.
  *
