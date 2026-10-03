@@ -1,0 +1,19 @@
+# ============================================================
+# File: .gitignore
+# Module: Version Control
+# Description: Files and folders excluded from Git tracking.
+# Author: Siti Sarah Raihanah Binti Azizan
+# Created: 03/10/2026
+# ============================================================
+
+# Local database credentials — never commit
+src/config/db-config.php
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+
+# IDE folders
+.vscode/
+.idea/
