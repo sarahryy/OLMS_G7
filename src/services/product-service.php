@@ -207,5 +207,21 @@ function updateProduct($product)
  */
 function deleteProduct($productId)
 {
-    // TODO: implement in Lab 4
+    $conn = getConnection();
+
+    $sql  = "DELETE FROM products WHERE product_id = ?";
+    $stmt = $conn->prepare($sql);
+    
+    if (!$stmt) {
+        $conn->close();
+        return false;
+    }
+
+    $stmt->bind_param('i', $productId);
+    $success = $stmt->execute();
+
+    $stmt->close();
+    $conn->close();
+
+    return $success;
 }
