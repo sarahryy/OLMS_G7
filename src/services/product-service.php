@@ -185,7 +185,28 @@ function getCategoryNames()
  */
 function getProductById($productId)
 {
-    // TODO: implement in Lab 3
+    $conn = getConnection();
+
+    $sql = "SELECT product_id, product_name, description, price,
+                   stock_quantity, brand, category_id, image_url
+            FROM products
+            WHERE product_id = ?";
+
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('i', $productId);
+    $stmt->execute();
+
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+
+    $stmt->close();
+    $conn->close();
+
+    if ($row) {
+        return buildProductFromRow($row);
+    }
+
+    return null;
 }
 
 /**
@@ -196,7 +217,47 @@ function getProductById($productId)
  */
 function updateProduct($product)
 {
-    // TODO: implement in Lab 4
+   $conn = getConnection();
+
+    $productId     = $product->getProductId();
+    $productName   = $product->getProductName();
+    $description   = $product->getDescription();
+    $price         = $product->getPrice();
+    $stockQuantity = $product->getStockQuantity();
+    $brand         = $product->getBrand();
+    $categoryId    = $product->getCategoryId();
+    $imageUrl      = $product->getImageUrl();
+
+    $sql = "UPDATE products
+            SET product_name = ?,
+                description = ?,
+                price = ?,
+                stock_quantity = ?,
+                brand = ?,
+                category_id = ?,
+                image_url = ?
+            WHERE product_id = ?";
+
+    $stmt = $conn->prepare($sql);
+
+    $stmt->bind_param(
+        'ssdisisi',
+        $productName,
+        $description,
+        $price,
+        $stockQuantity,
+        $brand,
+        $categoryId,
+        $imageUrl,
+        $productId
+    );
+
+    $success = $stmt->execute();
+
+    $stmt->close();
+    $conn->close();
+
+    return $success;
 }
 
 /**
