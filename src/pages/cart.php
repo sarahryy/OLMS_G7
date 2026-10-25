@@ -64,7 +64,7 @@ $grandTotal = $cart->getTotal();
 <body>
     <h1>Your Shopping Cart</h1>
 
-    <p><a href="manage-category.php">&larr; Back to Categories</a> | <a href="add-product.php">Add Products</a></p>
+    <p><a href="product-list.php">&larr; Continue Shopping</a></p>
 
     <?php if ($successMsg !== ''): ?>
         <div class="success"><?= htmlspecialchars($successMsg) ?></div>
