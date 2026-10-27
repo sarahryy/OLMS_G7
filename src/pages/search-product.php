@@ -32,7 +32,6 @@ include __DIR__ . '/../includes/header.php';
 <h1 class="page-title">Search Products</h1>
 <p class="page-subtitle">Search by product name, or filter by category</p>
 
-//form
 <form method="get" action="search-product.php">
     <div class="search-bar">
         <input type="text"

@@ -103,3 +103,96 @@ ON DUPLICATE KEY UPDATE email = email;
 INSERT INTO customers (customer_id, loyalty_points) 
 SELECT user_id, 50 FROM users WHERE email = 'ali@example.com'
 ON DUPLICATE KEY UPDATE customer_id = customer_id;
+
+-- --------------------------------------------------------
+-- Table structure for `orders`
+-- --------------------------------------------------------
+
+USE olms_g7;
+
+CREATE TABLE IF NOT EXISTS orders (
+    order_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    shipping_address TEXT NOT NULL,
+    total_amount DECIMAL(10,2) NOT NULL,
+    status ENUM(
+        'Pending',
+        'Preparing',
+        'Shipped',
+        'Completed',
+        'Cancelled'
+    ) NOT NULL DEFAULT 'Pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_orders_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(user_id)
+        ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- --------------------------------------------------------
+-- Table structure for `order items`
+-- --------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS order_items (
+    order_item_id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    product_id INT NULL,
+    product_name VARCHAR(150) NOT NULL,
+    quantity INT NOT NULL,
+    unit_price DECIMAL(10,2) NOT NULL,
+    subtotal DECIMAL(10,2) NOT NULL,
+    CONSTRAINT fk_order_items_order
+        FOREIGN KEY (order_id)
+        REFERENCES orders(order_id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_order_items_product
+        FOREIGN KEY (product_id)
+        REFERENCES products(product_id)
+        ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- --------------------------------------------------------
+-- Table structure for `payments` 
+-- --------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS payments (
+    payment_id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    payment_method VARCHAR(50) NOT NULL DEFAULT 'Cash on Delivery',
+    payment_status ENUM(
+        'Pending',
+        'Paid',
+        'Failed',
+        'Refunded'
+    ) NOT NULL DEFAULT 'Pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_payments_order
+        FOREIGN KEY (order_id)
+        REFERENCES orders(order_id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- --------------------------------------------------------
+-- Table structure for `shipping`
+-- --------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS shipping (
+    shipping_id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    shipping_address TEXT NOT NULL,
+    shipping_status ENUM(
+        'Pending',
+        'Preparing',
+        'Shipped',
+        'Completed',
+        'Cancelled'
+    ) NOT NULL DEFAULT 'Pending',
+    tracking_number VARCHAR(100) NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_shipping_order
+        FOREIGN KEY (order_id)
+        REFERENCES orders(order_id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -120,7 +120,9 @@ $grandTotal = $cart->getTotal();
                 <input type="hidden" name="action" value="clear">
                 <button type="submit" class="btn btn-secondary" onclick="return confirm('Are you sure you want to clear your entire cart?');">Clear Cart</button>
             </form>
-            <a href="#" class="btn btn-primary" onclick="alert('Checkout feature will be integrated with Person 3!'); return false;">Proceed to Checkout</a>
+            <a href="checkout.php" class="btn btn-primary">
+    Proceed to Checkout
+</a>
         </div>
     <?php endif; ?>
 </body>
