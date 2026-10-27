@@ -1,53 +1,78 @@
 <?php
-session_start();
+/**
+ * File: manage-users.php
+ * Module: User & Authentication (Administration)
+ * Description: Administrator screen listing every registered account, with
+ *              the ability to switch a user between the customer and admin
+ *              roles or remove an account. An administrator cannot delete
+ *              their own account.
+ * Module author: Lu'lu'
+ * Layout migrated to the shared header/footer on 27/10/2026.
+ */
+ 
+require_once __DIR__ . '/../includes/auth-guard.php';
 require_once __DIR__ . '/../services/user-service.php';
-
-// RBAC Guard: Admin-only access
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
-    http_response_code(403);
-    die("<div style='font-family:sans-serif; text-align:center; margin-top:50px;'><h2>Access Denied</h2><p>Administrator privileges are required to view this module.</p><a href='login.php'>Return to Login</a></div>");
-}
-
+ 
+requireAdmin();
+ 
 $message = '';
-if (isset($_GET['action']) && isset($_GET['id'])) {
+$error   = '';
+ 
+if (isset($_GET['action'], $_GET['id'])) {
     $targetId = (int)$_GET['id'];
-    if ($_GET['action'] === 'delete' && $targetId !== (int)$_SESSION['userId']) {
-        if (deleteUser($targetId)) $message = "User ID #{$targetId} was successfully deleted.";
+ 
+    if ($_GET['action'] === 'delete') {
+        if ($targetId === (int)$_SESSION['userId']) {
+            $error = 'You cannot delete your own account.';
+        } elseif (deleteUser($targetId)) {
+            $message = "User #{$targetId} was deleted.";
+        } else {
+            $error = "User #{$targetId} could not be deleted.";
+        }
     } elseif ($_GET['action'] === 'toggle_role') {
-        $newRole = ($_GET['current_role'] === 'admin') ? 'customer' : 'admin';
-        if (updateUserRole($targetId, $newRole)) $message = "User ID #{$targetId} role updated to {$newRole}.";
+        $newRole = (($_GET['current_role'] ?? '') === 'admin') ? 'customer' : 'admin';
+        if (updateUserRole($targetId, $newRole)) {
+            $message = "User #{$targetId} is now a {$newRole}.";
+        } else {
+            $error = "Role for user #{$targetId} could not be changed.";
+        }
     }
 }
-
+ 
 $users = getAllUsers();
+ 
+$pageTitle = 'Manage Users';
+include __DIR__ . '/../includes/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Manage Users - Admin</title>
-    <style>
-        body { font-family: sans-serif; background: #f7fafc; margin: 30px; }
-        .container { max-width: 900px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 10px; border: 1px solid #e2e8f0; text-align: left; }
-        th { background: #2d3748; color: #fff; }
-        .btn { padding: 5px 10px; text-decoration: none; border-radius: 3px; font-size: 13px; color: #fff; }
-        .btn-role { background: #3182ce; }
-        .btn-del { background: #e53e3e; }
-        .alert-success { background: #c6f6d5; color: #22543d; padding: 10px; border-radius: 4px; }
-    </style>
-</head>
-<body>
-<div class="container">
-    <h2>User Administration</h2>
-    <p>Admin Session: <strong><?= htmlspecialchars($_SESSION['name']) ?></strong> | <a href="logout.php">Logout</a></p>
-    <?php if ($message): ?><div class="alert-success"><?= htmlspecialchars($message) ?></div><?php endif; ?>
-
-    <table>
+ 
+<h1 class="page-title">User Administration</h1>
+<p class="page-subtitle">
+    <?= count($users) ?> registered account<?= count($users) === 1 ? '' : 's' ?>
+</p>
+ 
+<?php if ($message !== ''): ?>
+    <div class="message-success"><?= htmlspecialchars($message) ?></div>
+<?php endif; ?>
+ 
+<?php if ($error !== ''): ?>
+    <div class="message-error"><?= htmlspecialchars($error) ?></div>
+<?php endif; ?>
+ 
+<?php if (empty($users)): ?>
+ 
+    <div class="no-results">No registered accounts yet.</div>
+ 
+<?php else: ?>
+ 
+    <table class="data-table">
         <thead>
             <tr>
-                <th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Actions</th>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Role</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -57,17 +82,32 @@ $users = getAllUsers();
                     <td><?= htmlspecialchars($u['name']) ?></td>
                     <td><?= htmlspecialchars($u['email']) ?></td>
                     <td><?= htmlspecialchars($u['phone_number']) ?></td>
-                    <td><strong><?= htmlspecialchars($u['role']) ?></strong></td>
                     <td>
-                        <a class="btn btn-role" href="?action=toggle_role&id=<?= $u['user_id'] ?>&current_role=<?= $u['role'] ?>">Toggle Role</a>
-                        <?php if ($u['user_id'] !== (int)$_SESSION['userId']): ?>
-                            <a class="btn btn-del" href="?action=delete&id=<?= $u['user_id'] ?>" onclick="return confirm('Confirm deletion?')">Delete</a>
+                        <span class="badge <?= $u['role'] === 'admin' ? 'badge-shipped' : 'badge-completed' ?>">
+                            <?= htmlspecialchars($u['role']) ?>
+                        </span>
+                    </td>
+                    <td>
+                        <a class="btn btn-secondary btn-small"
+                           href="manage-users.php?action=toggle_role&id=<?= (int)$u['user_id'] ?>&current_role=<?= htmlspecialchars($u['role']) ?>">
+                            Change Role
+                        </a>
+                        <?php if ((int)$u['user_id'] !== (int)$_SESSION['userId']): ?>
+                            <a class="btn btn-danger btn-small"
+                               href="manage-users.php?action=delete&id=<?= (int)$u['user_id'] ?>"
+                               onclick="return confirm('Delete this account permanently?');">
+                                Delete
+                            </a>
+                        <?php else: ?>
+                            <span class="text-muted">Your account</span>
                         <?php endif; ?>
                     </td>
                 </tr>
             <?php endforeach; ?>
         </tbody>
     </table>
-</div>
-</body>
-</html>
+ 
+<?php endif; ?>
+ 
+<?php include __DIR__ . '/../includes/footer.php'; ?>
+ 

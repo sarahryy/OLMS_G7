@@ -1,204 +1,116 @@
 <?php
-session_start();
-
+/**
+ * File: checkout.php
+ * Module: Order Module
+ * Description: Final step of the purchase flow. Shows an order summary built
+ *              from the session cart, collects the delivery address, and
+ *              converts the cart into a confirmed order.
+ * Module author: Nad
+ * Layout migrated to the shared header/footer on 27/10/2026.
+ */
+ 
+require_once __DIR__ . '/../includes/auth-guard.php';
 require_once __DIR__ . '/../services/order-service.php';
 require_once __DIR__ . '/../services/cart-service.php';
-
-// Customer mesti login dahulu
-if (!isset($_SESSION['userId'])) {
-    header('Location: login.php');
-    exit;
-}
-
-if ($_SESSION['role'] !== 'customer') {
-    header('Location: manage-orders.php');
-    exit;
-}
-
-$cart = getCart();
-$cartItems = $cart->getItems();
+ 
+requireCustomer();
+ 
+$cart       = getCart();
+$cartItems  = $cart->getItems();
 $grandTotal = $cart->getTotal();
-
+ 
 $errorMessage = '';
-
-// Proses checkout apabila butang ditekan
+ 
+// Process the checkout when the form is submitted
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $shippingAddress = trim($_POST['shipping_address'] ?? '');
-
-    $result = createOrderFromCart(
-        (int) $_SESSION['userId'],
-        $shippingAddress
-    );
-
+ 
+    $result = createOrderFromCart((int)$_SESSION['userId'], $shippingAddress);
+ 
     if ($result['success']) {
-        $_SESSION['orderSuccess'] = 'Your order has been placed successfully!';
+        $_SESSION['orderSuccess'] = 'Your order has been placed successfully.';
         header('Location: order-history.php');
         exit;
     }
-
+ 
     $errorMessage = $result['message'];
 }
+ 
+$pageTitle = 'Checkout';
+include __DIR__ . '/../includes/header.php';
 ?>
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Checkout - StationeryMart</title>
-    <link rel="stylesheet" href="../css/main-style.css">
-
-    <style>
-        .checkout-container {
-            max-width: 850px;
-            margin: 30px auto;
-            padding: 25px;
-        }
-
-        .checkout-card {
-            background: white;
-            padding: 25px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
-
-        .checkout-card h2 {
-            margin-top: 0;
-        }
-
-        .checkout-item {
-            display: flex;
-            justify-content: space-between;
-            gap: 15px;
-            padding: 12px 0;
-            border-bottom: 1px solid #eee;
-        }
-
-        .address-input {
-            width: 100%;
-            min-height: 120px;
-            padding: 12px;
-            box-sizing: border-box;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            font: inherit;
-        }
-
-        .checkout-button {
-            display: inline-block;
-            padding: 12px 20px;
-            background: #2563eb;
-            color: white;
-            text-decoration: none;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-
-        .back-link {
-            display: inline-block;
-            margin-right: 12px;
-            color: #2563eb;
-            text-decoration: none;
-        }
-
-        .error-message {
-            background: #fee2e2;
-            color: #991b1b;
-            padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 15px;
-        }
-
-        .empty-message {
-            text-align: center;
-            padding: 40px 20px;
-        }
-    </style>
-</head>
-
-<body>
-
-<div class="checkout-container">
-    <h1>Checkout</h1>
-
-    <?php if ($errorMessage !== ''): ?>
-        <div class="error-message">
-            <?= htmlspecialchars($errorMessage) ?>
-        </div>
-    <?php endif; ?>
-
-    <?php if (empty($cartItems)): ?>
-
-        <div class="checkout-card empty-message">
-            <h2>Your cart is empty</h2>
-            <p>Please add products to your cart before checking out.</p>
-            <a href="search-product.php" class="checkout-button">
-                Browse Products
-            </a>
-        </div>
-
-    <?php else: ?>
-
-        <div class="checkout-card">
-            <h2>Order Summary</h2>
-
+ 
+<h1 class="page-title">Checkout</h1>
+<p class="page-subtitle">Review your order and confirm your delivery address</p>
+ 
+<?php if ($errorMessage !== ''): ?>
+    <div class="message-error"><?= htmlspecialchars($errorMessage) ?></div>
+<?php endif; ?>
+ 
+<?php if (empty($cartItems)): ?>
+ 
+    <div class="no-results">
+        Your cart is empty. Please add products before checking out.
+    </div>
+ 
+    <div class="form-actions">
+        <a class="btn btn-primary" href="product-list.php">Browse Products</a>
+    </div>
+ 
+<?php else: ?>
+ 
+    <h2 class="section-title">Order Summary</h2>
+ 
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th class="text-right">Unit Price (RM)</th>
+                <th class="text-right">Quantity</th>
+                <th class="text-right">Subtotal (RM)</th>
+            </tr>
+        </thead>
+        <tbody>
             <?php foreach ($cartItems as $item): ?>
-                <div class="checkout-item">
-                    <div>
-                        <strong>
-                            <?= htmlspecialchars($item->getProductName()) ?>
-                        </strong>
-                        <br>
-                        Quantity: <?= (int) $item->getQuantity() ?>
-                        × RM<?= number_format($item->getPrice(), 2) ?>
-                    </div>
-
-                    <div>
-                        RM<?= number_format($item->getSubtotal(), 2) ?>
-                    </div>
-                </div>
+                <tr>
+                    <td><?= htmlspecialchars($item->getProductName()) ?></td>
+                    <td class="text-right"><?= number_format($item->getPrice(), 2) ?></td>
+                    <td class="text-right"><?= (int)$item->getQuantity() ?></td>
+                    <td class="text-right"><?= number_format($item->getSubtotal(), 2) ?></td>
+                </tr>
             <?php endforeach; ?>
-
-            <h3 style="text-align: right;">
-                Total: RM<?= number_format($grandTotal, 2) ?>
-            </h3>
-
-            <p>Payment method: Cash on Delivery (COD)</p>
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="3" class="text-right">Total Payable</td>
+                <td class="text-right">RM <?= number_format($grandTotal, 2) ?></td>
+            </tr>
+        </tfoot>
+    </table>
+ 
+    <p class="page-subtitle" style="margin-top:14px;">
+        Payment method: <strong>Cash on Delivery (COD)</strong>
+    </p>
+ 
+    <h2 class="section-title">Shipping Information</h2>
+ 
+    <form method="post" action="checkout.php">
+        <div class="form-group">
+            <label class="form-label" for="shipping_address">Delivery Address</label>
+            <textarea id="shipping_address" name="shipping_address"
+                      class="form-textarea" rows="5"
+                      placeholder="Enter your full delivery address"
+                      required><?= htmlspecialchars($_POST['shipping_address'] ?? '') ?></textarea>
+            <span class="form-hint">Include unit number, street, postcode and state.</span>
         </div>
-
-        <div class="checkout-card">
-            <h2>Shipping Information</h2>
-
-            <form method="POST" action="checkout.php">
-                <label for="shipping_address">
-                    Delivery Address
-                </label>
-
-                <textarea
-                    id="shipping_address"
-                    name="shipping_address"
-                    class="address-input"
-                    placeholder="Enter your full delivery address"
-                    required
-                ><?= htmlspecialchars($_POST['shipping_address'] ?? '') ?></textarea>
-
-                <br><br>
-
-                <a href="cart.php" class="back-link">
-                    Back to Cart
-                </a>
-
-                <button type="submit" class="checkout-button">
-                    Place Order
-                </button>
-            </form>
+ 
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Place Order</button>
+            <a class="link-back" href="cart.php">Back to Cart</a>
         </div>
-
-    <?php endif; ?>
-</div>
-
-</body>
-</html>
+    </form>
+ 
+<?php endif; ?>
+ 
+<?php include __DIR__ . '/../includes/footer.php'; ?>
+ 

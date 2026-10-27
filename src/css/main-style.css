@@ -2,18 +2,20 @@
  * File: main-style.css
  * Module: Shared Presentation
  * Description: Shared stylesheet for all StationeryMart (OLMS) pages.
- *              Covers layout, forms, buttons, tables and status messages.
+ *              Covers layout, navigation, forms, buttons, tables, cards,
+ *              status badges and messages. Every page in the system links
+ *              to this one file so the interface stays consistent.
  * Author: Siti Sarah Raihanah Binti Azizan
  * Created: 02/10/2026
- * Last Modified: 02/10/2026
+ * Last Modified: 27/10/2026
  */
-
+ 
 /* ===== Base ===== */
-
+ 
 * {
     box-sizing: border-box;
 }
-
+ 
 body {
     margin: 0;
     padding: 0;
@@ -23,9 +25,9 @@ body {
     color: #222222;
     background-color: #f4f5f7;
 }
-
+ 
 /* ===== Page Layout ===== */
-
+ 
 .page-container {
     max-width: 960px;
     margin: 24px auto;
@@ -34,58 +36,86 @@ body {
     border: 1px solid #d8dbe0;
     border-radius: 6px;
 }
-
+ 
+/* Narrow variant used by login and register */
+.page-container.narrow {
+    max-width: 480px;
+}
+ 
 .page-title {
     margin: 0 0 4px 0;
     font-size: 22px;
     color: #1a3d6d;
 }
-
+ 
 .page-subtitle {
     margin: 0 0 20px 0;
     font-size: 14px;
     color: #666666;
 }
-
+ 
+.section-title {
+    margin: 24px 0 10px 0;
+    padding-bottom: 6px;
+    font-size: 17px;
+    color: #1a3d6d;
+    border-bottom: 1px solid #e1e4e8;
+}
+ 
 /* ===== Navigation Bar ===== */
-
+ 
 .nav-bar {
     background-color: #1a3d6d;
     padding: 12px 28px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
 }
-
+ 
 .nav-brand {
     color: #ffffff;
     font-size: 18px;
     font-weight: bold;
     margin-right: 28px;
 }
-
+ 
 .nav-link {
     color: #d6e2f2;
     text-decoration: none;
     margin-right: 18px;
     font-size: 14px;
 }
-
+ 
 .nav-link:hover {
     color: #ffffff;
     text-decoration: underline;
 }
-
+ 
+.nav-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+}
+ 
+.nav-user {
+    color: #d6e2f2;
+    font-size: 13px;
+    margin-right: 16px;
+}
+ 
 /* ===== Forms ===== */
-
+ 
 .form-group {
     margin-bottom: 14px;
 }
-
+ 
 .form-label {
     display: block;
     margin-bottom: 4px;
     font-weight: bold;
     font-size: 14px;
 }
-
+ 
 .form-input,
 .form-select,
 .form-textarea {
@@ -97,24 +127,46 @@ body {
     border-radius: 4px;
     background-color: #ffffff;
 }
-
+ 
 .form-input:focus,
 .form-select:focus,
 .form-textarea:focus {
     outline: none;
     border-color: #1a3d6d;
 }
-
+ 
+.form-input:disabled {
+    background-color: #f1f2f4;
+    color: #666666;
+}
+ 
 .form-textarea {
     min-height: 70px;
     resize: vertical;
 }
-
+ 
 .form-hint {
     font-size: 12px;
     color: #777777;
 }
-
+ 
+/* Full-width submit button used on login and register */
+.btn-block {
+    display: block;
+    width: 100%;
+    padding: 11px;
+    font-size: 15px;
+}
+ 
+/* Row of buttons at the end of a form */
+.form-actions {
+    margin-top: 18px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+ 
 /* Inline search bar: input and button side by side */
 .search-bar {
     display: flex;
@@ -122,15 +174,32 @@ body {
     flex-wrap: wrap;
     margin-bottom: 18px;
 }
-
+ 
 .search-bar .form-input,
 .search-bar .form-select {
     width: auto;
     flex: 1 1 200px;
 }
-
+ 
+/* Small form sitting inside a table cell */
+.inline-form {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+}
+ 
+.qty-input {
+    width: 56px;
+    padding: 4px 6px;
+    border: 1px solid #b9bec7;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: inherit;
+}
+ 
 /* ===== Buttons ===== */
-
+ 
 .btn {
     display: inline-block;
     padding: 8px 18px;
@@ -141,48 +210,68 @@ body {
     cursor: pointer;
     text-decoration: none;
 }
-
+ 
 .btn-primary {
     background-color: #1a3d6d;
     color: #ffffff;
 }
-
+ 
 .btn-primary:hover {
     background-color: #14304f;
 }
-
+ 
 .btn-secondary {
     background-color: #e3e6ea;
     color: #222222;
 }
-
+ 
 .btn-secondary:hover {
     background-color: #d2d6dc;
 }
-
+ 
 .btn-danger {
     background-color: #a62828;
     color: #ffffff;
 }
-
+ 
 .btn-danger:hover {
     background-color: #851f1f;
 }
-
+ 
+.btn-warning {
+    background-color: #b57b12;
+    color: #ffffff;
+}
+ 
+.btn-warning:hover {
+    background-color: #95650e;
+}
+ 
 .btn-small {
     padding: 4px 12px;
     font-size: 13px;
 }
-
+ 
+/* A plain text link used beside buttons */
+.link-back {
+    color: #1a3d6d;
+    font-size: 14px;
+    text-decoration: none;
+}
+ 
+.link-back:hover {
+    text-decoration: underline;
+}
+ 
 /* ===== Data Table ===== */
-
+ 
 .data-table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 10px;
     font-size: 14px;
 }
-
+ 
 .data-table th {
     background-color: #1a3d6d;
     color: #ffffff;
@@ -190,27 +279,153 @@ body {
     padding: 10px;
     font-weight: bold;
 }
-
+ 
 .data-table td {
     padding: 9px 10px;
     border-bottom: 1px solid #e1e4e8;
+    vertical-align: middle;
 }
-
+ 
 .data-table tr:nth-child(even) td {
     background-color: #f8f9fa;
 }
-
+ 
 .data-table tr:hover td {
     background-color: #eef3fa;
 }
-
+ 
+.data-table tfoot td {
+    background-color: #eef1f5;
+    font-weight: bold;
+    border-top: 2px solid #1a3d6d;
+}
+ 
 .text-right {
     text-align: right;
 }
-
+ 
+.text-center {
+    text-align: center;
+}
+ 
+.text-muted {
+    color: #777777;
+}
+ 
+.out-of-stock {
+    color: #a62828;
+    font-size: 13px;
+    font-style: italic;
+}
+ 
+/* ===== Cards (used for orders, summaries, grouped details) ===== */
+ 
+.card {
+    padding: 18px 20px;
+    margin-bottom: 18px;
+    background-color: #ffffff;
+    border: 1px solid #d8dbe0;
+    border-radius: 6px;
+}
+ 
+.card-title {
+    margin: 0 0 12px 0;
+    font-size: 17px;
+    color: #1a3d6d;
+}
+ 
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+ 
+/* Two-column key/value area inside a card */
+.detail-grid {
+    display: grid;
+    grid-template-columns: 170px 1fr;
+    gap: 6px 14px;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+ 
+.detail-grid dt {
+    font-weight: bold;
+    color: #444444;
+}
+ 
+.detail-grid dd {
+    margin: 0;
+}
+ 
+/* Total line at the bottom of a summary */
+.summary-total {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 2px solid #1a3d6d;
+    text-align: right;
+    font-size: 17px;
+    font-weight: bold;
+    color: #1a3d6d;
+}
+ 
+/* ===== Status Badges ===== */
+ 
+.badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+ 
+.badge-pending {
+    background-color: #fdf0d5;
+    color: #7a5c0b;
+}
+ 
+.badge-preparing {
+    background-color: #e3ecf8;
+    color: #1a3d6d;
+}
+ 
+.badge-shipped {
+    background-color: #e0eefb;
+    color: #14506e;
+}
+ 
+.badge-completed {
+    background-color: #e4f3e7;
+    color: #1d5526;
+}
+ 
+.badge-cancelled {
+    background-color: #fae9e9;
+    color: #7d1f1f;
+}
+ 
+.badge-paid {
+    background-color: #e4f3e7;
+    color: #1d5526;
+}
+ 
+.badge-failed {
+    background-color: #fae9e9;
+    color: #7d1f1f;
+}
+ 
+.badge-refunded {
+    background-color: #ece9f6;
+    color: #4a3c7a;
+}
+ 
 /* ===== Status Messages ===== */
-
-.message-success {
+ 
+.message-success,
+.alert-success {
     padding: 11px 14px;
     margin-bottom: 16px;
     border-radius: 4px;
@@ -218,8 +433,9 @@ body {
     border-left: 4px solid #2e7d3a;
     color: #1d5526;
 }
-
-.message-error {
+ 
+.message-error,
+.alert-danger {
     padding: 11px 14px;
     margin-bottom: 16px;
     border-radius: 4px;
@@ -227,8 +443,9 @@ body {
     border-left: 4px solid #a62828;
     color: #7d1f1f;
 }
-
-.message-info {
+ 
+.message-info,
+.alert-info {
     padding: 11px 14px;
     margin-bottom: 16px;
     border-radius: 4px;
@@ -236,8 +453,14 @@ body {
     border-left: 4px solid #1a3d6d;
     color: #16365c;
 }
-
-/* Shown when a search returns no matching records */
+ 
+/* Error lists shown by the registration form */
+.alert-danger ul {
+    margin: 0;
+    padding-left: 20px;
+}
+ 
+/* Shown when a search or list returns no records */
 .no-results {
     padding: 28px;
     text-align: center;
@@ -246,9 +469,9 @@ body {
     border: 1px dashed #c4c9d0;
     border-radius: 4px;
 }
-
+ 
 /* ===== Confirmation Panel (delete) ===== */
-
+ 
 .confirm-panel {
     padding: 16px 18px;
     margin-bottom: 16px;
@@ -256,27 +479,27 @@ body {
     border: 1px solid #e0c97d;
     border-radius: 4px;
 }
-
+ 
 .confirm-title {
     margin: 0 0 10px 0;
     font-size: 16px;
     color: #7a5c0b;
 }
-
+ 
 .detail-row {
     padding: 5px 0;
     border-bottom: 1px solid #ece4cd;
     font-size: 14px;
 }
-
+ 
 .detail-label {
     display: inline-block;
     width: 150px;
     font-weight: bold;
 }
-
+ 
 /* ===== Footer ===== */
-
+ 
 .page-footer {
     max-width: 960px;
     margin: 0 auto 28px auto;
@@ -285,3 +508,32 @@ body {
     color: #888888;
     text-align: center;
 }
+ 
+/* ===== Small screens ===== */
+ 
+@media (max-width: 640px) {
+    .page-container {
+        margin: 12px;
+        padding: 18px 16px;
+    }
+ 
+    .nav-bar {
+        padding: 10px 16px;
+    }
+ 
+    .nav-right {
+        margin-left: 0;
+        width: 100%;
+        margin-top: 8px;
+    }
+ 
+    .detail-grid {
+        grid-template-columns: 1fr;
+    }
+ 
+    .data-table {
+        display: block;
+        overflow-x: auto;
+    }
+}
+ 

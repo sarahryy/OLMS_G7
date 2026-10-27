@@ -49,7 +49,7 @@ function registerCustomer(Customer $customer): bool {
     $stmtUser->close();
 
     // 3. Insert into customers table
-    $sqlCust = "INSERT INTO customers (user_id, loyalty_points, registration_date) VALUES (?, ?, ?)";
+    $sqlCust = "INSERT INTO customers (customer_id, loyalty_points, registration_date) VALUES (?, ?, ?)";
     $stmtCust = $conn->prepare($sqlCust);
     $points = $customer->getLoyaltyPoints();
     $regDate = $customer->getRegistrationDate();
@@ -97,7 +97,7 @@ function getUserById(int $userId): ?array {
     $conn = getConnection();
     $sql = "SELECT u.user_id, u.name, u.email, u.phone_number, u.role, c.loyalty_points 
             FROM users u 
-            LEFT JOIN customers c ON u.user_id = c.user_id 
+            LEFT JOIN customers c ON u.user_id = c.customer_id
             WHERE u.user_id = ? LIMIT 1";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $userId);
