@@ -1,55 +1,71 @@
 <?php
-session_start();
+/**
+ * File: login.php
+ * Module: User & Authentication
+ * Description: Authenticates a registered user and starts their session.
+ *              Administrators are sent to the management screens and
+ *              customers to the product catalogue.
+ * Module author: Lu'lu'
+ * Layout migrated to the shared header/footer on 27/10/2026.
+ */
+ 
+require_once __DIR__ . '/../includes/auth-guard.php';
 require_once __DIR__ . '/../services/user-service.php';
-
+ 
 $error = '';
+ 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = trim($_POST['email'] ?? '');
+    $email    = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
-
+ 
     $user = loginUser($email, $password);
+ 
     if ($user) {
         session_regenerate_id(true);
         $_SESSION['userId'] = $user['userId'];
-        $_SESSION['name'] = $user['name'];
-        $_SESSION['email'] = $user['email'];
-        $_SESSION['role'] = $user['role'];
-
+        $_SESSION['name']   = $user['name'];
+        $_SESSION['email']  = $user['email'];
+        $_SESSION['role']   = $user['role'];
+ 
         if ($user['role'] === 'admin') {
             header('Location: manage-users.php');
         } else {
-            header('Location: profile.php');
+            header('Location: product-list.php');
         }
         exit;
-    } else {
-        $error = "Invalid email or password.";
     }
+ 
+    $error = 'Invalid email or password.';
 }
+ 
+$pageTitle = 'Login';
+include __DIR__ . '/../includes/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Login - StationeryMart</title>
-    <style>
-        .container { max-width: 420px; margin: 50px auto; background: #fff; padding: 25px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); font-family: sans-serif; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        button { width: 100%; padding: 12px; background: #1a365d; color: #fff; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
-        .alert-danger { background: #fed7d7; color: #9b2c2c; padding: 10px; margin-bottom: 15px; border-radius: 4px; }
-    </style>
-</head>
-<body>
-<div class="container">
-    <h2>Login to StationeryMart</h2>
-    <?php if ($error): ?><div class="alert-danger"><?= htmlspecialchars($error) ?></div><?php endif; ?>
-    <form method="POST" action="">
-        <div class="form-group"><label>Email Address</label><input type="email" name="email" required></div>
-        <div class="form-group"><label>Password</label><input type="password" name="password" required></div>
-        <button type="submit">Login</button>
-    </form>
-    <p style="margin-top:15px; text-align:center;">Don't have an account? <a href="register.php">Register</a></p>
-</div>
-</body>
-</html>
+ 
+<h1 class="page-title">Login to StationeryMart</h1>
+<p class="page-subtitle">Sign in to shop, track your orders and manage your profile</p>
+ 
+<?php if ($error !== ''): ?>
+    <div class="message-error"><?= htmlspecialchars($error) ?></div>
+<?php endif; ?>
+ 
+<form method="post" action="login.php">
+    <div class="form-group">
+        <label class="form-label" for="email">Email Address</label>
+        <input type="email" id="email" name="email" class="form-input" required>
+    </div>
+ 
+    <div class="form-group">
+        <label class="form-label" for="password">Password</label>
+        <input type="password" id="password" name="password" class="form-input" required>
+    </div>
+ 
+    <button type="submit" class="btn btn-primary btn-block">Login</button>
+</form>
+ 
+<p class="page-subtitle" style="margin-top:18px; text-align:center;">
+    Don't have an account? <a class="link-back" href="register.php">Register here</a>
+</p>
+ 
+<?php include __DIR__ . '/../includes/footer.php'; ?>
+ 

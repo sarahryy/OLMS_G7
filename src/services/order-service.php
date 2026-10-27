@@ -1,512 +1,196 @@
-
 <?php
 /**
- * File: order-service.php
- * Module: Order Management
- * Description: Handles checkout, order history, cancellation and order status.
- * Author: Dini Nadhirah
+ * File: order-history.php
+ * Module: Order Module
+ * Description: Lists every order the signed-in customer has placed, with the
+ *              items purchased, payment and shipping status, and the option
+ *              to cancel an order that is still pending.
+ * Module author: Nad
+ * Layout migrated to the shared header/footer on 27/10/2026.
  */
-
+ 
+require_once __DIR__ . '/../includes/auth-guard.php';
+require_once __DIR__ . '/../services/order-service.php';
 require_once __DIR__ . '/../config/db-config.php';
-require_once __DIR__ . '/../classes/Order.php';
-require_once __DIR__ . '/../classes/OrderItem.php';
-require_once __DIR__ . '/../classes/Cart.php';
-require_once __DIR__ . '/../classes/CartItem.php';
-require_once __DIR__ . '/cart-service.php';
-
-/**
- * Creates an order from the current cart.
- * Returns ['success' => true, 'orderId' => ID]
- * or ['success' => false, 'message' => error].
- */
-function createOrderFromCart($userId, $shippingAddress)
-{
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
-    }
-
-    $shippingAddress = trim($shippingAddress);
-
-    if ((int)$userId <= 0) {
-        return ['success' => false, 'message' => 'Please log in first.'];
-    }
-
-    if ($shippingAddress === '') {
-        return ['success' => false, 'message' => 'Shipping address is required.'];
-    }
-
-    $cart = getCart();
-    $items = $cart->getItems();
-
-    if (empty($items)) {
-        return ['success' => false, 'message' => 'Your cart is empty.'];
-    }
-
-    $conn = getConnection();
-    $conn->begin_transaction();
-
-    try {
-        $total = 0;
-        $verifiedItems = [];
-
-        // Recheck product prices and stock from the database.
-        $productStmt = $conn->prepare(
-            "SELECT product_id, product_name, price, stock_quantity
-             FROM products
-             WHERE product_id = ?
-             FOR UPDATE"
-        );
-
-        foreach ($items as $item) {
-            $productId = (int)$item->getProductId();
-            $quantity = (int)$item->getQuantity();
-
-            if ($productId <= 0 || $quantity <= 0) {
-                throw new Exception('Invalid product or quantity in cart.');
-            }
-
-            $productStmt->bind_param('i', $productId);
-            $productStmt->execute();
-            $result = $productStmt->get_result();
-            $product = $result->fetch_assoc();
-
-            if (!$product) {
-                throw new Exception('A product in your cart no longer exists.');
-            }
-
-            if ((int)$product['stock_quantity'] < $quantity) {
-                throw new Exception(
-                    'Not enough stock for ' . $product['product_name'] . '.'
-                );
-            }
-
-            $unitPrice = (float)$product['price'];
-            $subtotal = $unitPrice * $quantity;
-            $total += $subtotal;
-
-            $verifiedItems[] = [
-                'productId' => (int)$product['product_id'],
-                'productName' => $product['product_name'],
-                'quantity' => $quantity,
-                'unitPrice' => $unitPrice,
-                'subtotal' => $subtotal
-            ];
-        }
-
-        $productStmt->close();
-
-        // Create the order.
-        $stmt = $conn->prepare(
-            "INSERT INTO orders (user_id, shipping_address, total_amount, status)
-             VALUES (?, ?, ?, 'Pending')"
-        );
-        $stmt->bind_param('isd', $userId, $shippingAddress, $total);
-        $stmt->execute();
-
-        $orderId = $conn->insert_id;
-        $stmt->close();
-
-        // Save each order item and deduct stock.
-        $itemStmt = $conn->prepare(
-            "INSERT INTO order_items
-             (order_id, product_id, product_name, quantity, unit_price, subtotal)
-             VALUES (?, ?, ?, ?, ?, ?)"
-        );
-
-        $stockStmt = $conn->prepare(
-            "UPDATE products
-             SET stock_quantity = stock_quantity - ?
-             WHERE product_id = ? AND stock_quantity >= ?"
-        );
-
-        foreach ($verifiedItems as $item) {
-            $productId = $item['productId'];
-            $productName = $item['productName'];
-            $quantity = $item['quantity'];
-            $unitPrice = $item['unitPrice'];
-            $subtotal = $item['subtotal'];
-
-            $itemStmt->bind_param(
-                'iisidd',
-                $orderId,
-                $productId,
-                $productName,
-                $quantity,
-                $unitPrice,
-                $subtotal
-            );
-            $itemStmt->execute();
-
-            $stockStmt->bind_param('iii', $quantity, $productId, $quantity);
-            $stockStmt->execute();
-
-            if ($stockStmt->affected_rows !== 1) {
-                throw new Exception('Stock changed during checkout. Please try again.');
-            }
-        }
-
-        $itemStmt->close();
-        $stockStmt->close();
-
-        // Create payment record automatically.
-        $paymentMethod = 'Cash on Delivery';
-        $paymentStmt = $conn->prepare(
-            "INSERT INTO payments (order_id, amount, payment_method, payment_status)
-             VALUES (?, ?, ?, 'Pending')"
-        );
-        $paymentStmt->bind_param('ids', $orderId, $total, $paymentMethod);
-        $paymentStmt->execute();
-        $paymentStmt->close();
-
-        // Create shipping record automatically.
-        $shippingStmt = $conn->prepare(
-            "INSERT INTO shipping (order_id, shipping_address, shipping_status)
-             VALUES (?, ?, 'Pending')"
-        );
-        $shippingStmt->bind_param('is', $orderId, $shippingAddress);
-        $shippingStmt->execute();
-        $shippingStmt->close();
-
-        $conn->commit();
-
-        // Empty the cart only after the order succeeds.
-        $cart->clear();
-        saveCart($cart);
-
-        return ['success' => true, 'orderId' => $orderId];
-
-    } catch (Throwable $e) {
-        $conn->rollback();
-
-        return [
-            'success' => false,
-            'message' => $e->getMessage()
-        ];
-    } finally {
-        $conn->close();
-    }
-}
-
-/**
- * Returns all orders belonging to one customer.
- */
-function getOrdersByUserId($userId)
-{
-    $conn = getConnection();
-
-    $stmt = $conn->prepare(
-        "SELECT order_id, user_id, shipping_address, total_amount, status, created_at
-         FROM orders
-         WHERE user_id = ?
-         ORDER BY created_at DESC"
-    );
-    $stmt->bind_param('i', $userId);
-    $stmt->execute();
-
-    $result = $stmt->get_result();
-    $orders = [];
-
-    while ($row = $result->fetch_assoc()) {
-        $orders[] = new Order(
-            $row['order_id'],
-            $row['user_id'],
-            $row['shipping_address'],
-            $row['total_amount'],
-            $row['status'],
-            $row['created_at']
-        );
-    }
-
-    $stmt->close();
-    $conn->close();
-
-    return $orders;
-}
-
-/**
- * Gets one order with its items.
- * Customers must provide their own user ID.
- * Admins can pass null as the user ID.
- */
-function getOrderDetails($orderId, $userId = null)
-{
-    $conn = getConnection();
-
-    if ($userId === null) {
-        $stmt = $conn->prepare(
-            "SELECT order_id, user_id, shipping_address, total_amount, status, created_at
-             FROM orders WHERE order_id = ?"
-        );
-        $stmt->bind_param('i', $orderId);
+ 
+requireCustomer();
+ 
+$userId  = (int)$_SESSION['userId'];
+$message = $_SESSION['orderSuccess'] ?? '';
+unset($_SESSION['orderSuccess']);
+ 
+$error = '';
+ 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_order_id'])) {
+    $orderId = (int)$_POST['cancel_order_id'];
+    $result  = cancelCustomerOrder($orderId, $userId);
+ 
+    if ($result['success']) {
+        $message = $result['message'];
     } else {
-        $stmt = $conn->prepare(
-            "SELECT order_id, user_id, shipping_address, total_amount, status, created_at
-             FROM orders WHERE order_id = ? AND user_id = ?"
-        );
-        $stmt->bind_param('ii', $orderId, $userId);
-    }
-
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result->fetch_assoc();
-    $stmt->close();
-
-    if (!$row) {
-        $conn->close();
-        return null;
-    }
-
-    $order = new Order(
-        $row['order_id'],
-        $row['user_id'],
-        $row['shipping_address'],
-        $row['total_amount'],
-        $row['status'],
-        $row['created_at']
-    );
-
-    $itemStmt = $conn->prepare(
-        "SELECT order_item_id, order_id, product_id, product_name,
-                quantity, unit_price, subtotal
-         FROM order_items
-         WHERE order_id = ?
-         ORDER BY order_item_id"
-    );
-    $itemStmt->bind_param('i', $orderId);
-    $itemStmt->execute();
-
-    $itemResult = $itemStmt->get_result();
-    $orderItems = [];
-
-    while ($itemRow = $itemResult->fetch_assoc()) {
-        $orderItems[] = new OrderItem(
-            $itemRow['order_item_id'],
-            $itemRow['order_id'],
-            $itemRow['product_id'],
-            $itemRow['product_name'],
-            $itemRow['quantity'],
-            $itemRow['unit_price'],
-            $itemRow['subtotal']
-        );
-    }
-
-    $itemStmt->close();
-    $conn->close();
-
-    $order->setItems($orderItems);
-
-    return $order;
-}
-
-/**
- * Cancels a customer's own order while it is Pending.
- * Restores stock and marks shipping as Cancelled.
- */
-function cancelCustomerOrder($orderId, $userId)
-{
-    $conn = getConnection();
-    $conn->begin_transaction();
-
-    try {
-        $stmt = $conn->prepare(
-            "SELECT status FROM orders
-             WHERE order_id = ? AND user_id = ?
-             FOR UPDATE"
-        );
-        $stmt->bind_param('ii', $orderId, $userId);
-        $stmt->execute();
-        $order = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-
-        if (!$order) {
-            throw new Exception('Order not found.');
-        }
-
-        if ($order['status'] !== 'Pending') {
-            throw new Exception('Only Pending orders can be cancelled.');
-        }
-
-        $itemStmt = $conn->prepare(
-            "SELECT product_id, quantity
-             FROM order_items
-             WHERE order_id = ? AND product_id IS NOT NULL"
-        );
-        $itemStmt->bind_param('i', $orderId);
-        $itemStmt->execute();
-        $items = $itemStmt->get_result()->fetch_all(MYSQLI_ASSOC);
-        $itemStmt->close();
-
-        $stockStmt = $conn->prepare(
-            "UPDATE products SET stock_quantity = stock_quantity + ?
-             WHERE product_id = ?"
-        );
-
-        foreach ($items as $item) {
-            $quantity = (int)$item['quantity'];
-            $productId = (int)$item['product_id'];
-            $stockStmt->bind_param('ii', $quantity, $productId);
-            $stockStmt->execute();
-        }
-        $stockStmt->close();
-
-        $updateStmt = $conn->prepare(
-            "UPDATE orders SET status = 'Cancelled'
-             WHERE order_id = ? AND user_id = ? AND status = 'Pending'"
-        );
-        $updateStmt->bind_param('ii', $orderId, $userId);
-        $updateStmt->execute();
-
-        if ($updateStmt->affected_rows !== 1) {
-            throw new Exception('Unable to cancel order.');
-        }
-        $updateStmt->close();
-
-        $shippingStmt = $conn->prepare(
-            "UPDATE shipping SET shipping_status = 'Cancelled'
-             WHERE order_id = ?"
-        );
-        $shippingStmt->bind_param('i', $orderId);
-        $shippingStmt->execute();
-        $shippingStmt->close();
-
-        $paymentStmt = $conn->prepare(
-            "UPDATE payments SET payment_status = 'Refunded'
-             WHERE order_id = ? AND payment_status = 'Paid'"
-        );
-        $paymentStmt->bind_param('i', $orderId);
-        $paymentStmt->execute();
-        $paymentStmt->close();
-
-        $conn->commit();
-        return ['success' => true, 'message' => 'Order cancelled successfully.'];
-
-    } catch (Throwable $e) {
-        $conn->rollback();
-        return ['success' => false, 'message' => $e->getMessage()];
-    } finally {
-        $conn->close();
+        $error = $result['message'];
     }
 }
-
+ 
+$orders = getOrdersByUserId($userId);
+$conn   = getConnection();
+ 
 /**
- * Lists all orders for the admin page.
+ * Converts an order, payment or shipping status into a badge CSS class.
+ *
+ * @param string $status Status value stored in the database
+ * @return string CSS class name for the badge
  */
-function getAllOrdersForAdmin()
+function statusBadgeClass($status)
 {
-    $conn = getConnection();
-
-    $sql = "SELECT o.order_id, o.user_id, u.name AS customer_name,
-                   o.shipping_address, o.total_amount, o.status, o.created_at
-            FROM orders o
-            INNER JOIN users u ON o.user_id = u.user_id
-            ORDER BY o.created_at DESC";
-
-    $result = $conn->query($sql);
-    $orders = [];
-
-    while ($row = $result->fetch_assoc()) {
-        $orders[] = $row;
-    }
-
-    $conn->close();
-    return $orders;
+    return 'badge badge-' . strtolower(trim((string)$status));
 }
-
-/**
- * Updates order status and corresponding shipping status.
- * Allowed transitions:
- * Pending -> Preparing -> Shipped -> Completed.
- */
-function updateOrderStatus($orderId, $newStatus)
-{
-    $allowedTransitions = [
-        'Pending' => ['Preparing'],
-        'Preparing' => ['Shipped'],
-        'Shipped' => ['Completed'],
-        'Completed' => [],
-        'Cancelled' => []
-    ];
-
-    if (!in_array($newStatus, ['Pending', 'Preparing', 'Shipped', 'Completed'], true)) {
-        return ['success' => false, 'message' => 'Invalid order status.'];
-    }
-
-    $conn = getConnection();
-    $conn->begin_transaction();
-
-    try {
+ 
+$pageTitle = 'My Orders';
+include __DIR__ . '/../includes/header.php';
+?>
+ 
+<h1 class="page-title">My Order History</h1>
+<p class="page-subtitle">
+    <?= count($orders) ?> order<?= count($orders) === 1 ? '' : 's' ?> placed
+</p>
+ 
+<?php if ($message !== ''): ?>
+    <div class="message-success"><?= htmlspecialchars($message) ?></div>
+<?php endif; ?>
+ 
+<?php if ($error !== ''): ?>
+    <div class="message-error"><?= htmlspecialchars($error) ?></div>
+<?php endif; ?>
+ 
+<?php if (empty($orders)): ?>
+ 
+    <div class="no-results">You have not placed any orders yet.</div>
+ 
+    <div class="form-actions">
+        <a class="btn btn-primary" href="product-list.php">Browse Products</a>
+    </div>
+ 
+<?php else: ?>
+ 
+    <?php foreach ($orders as $order): ?>
+        <?php
+        $orderId = (int)$order->getOrderId();
+ 
+        // Items belonging to this order
         $stmt = $conn->prepare(
-            "SELECT status FROM orders WHERE order_id = ? FOR UPDATE"
+            "SELECT oi.product_name, oi.quantity, oi.unit_price, oi.subtotal
+             FROM order_items oi WHERE oi.order_id = ?"
         );
         $stmt->bind_param('i', $orderId);
         $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
+        $items = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
-
-        if (!$row) {
-            throw new Exception('Order not found.');
-        }
-
-        $currentStatus = $row['status'];
-
-        if (!in_array($newStatus, $allowedTransitions[$currentStatus] ?? [], true)) {
-            throw new Exception('This status transition is not allowed.');
-        }
-
-        $updateStmt = $conn->prepare(
-            "UPDATE orders SET status = ? WHERE order_id = ?"
+ 
+        // Payment and shipping records linked to this order
+        $stmt = $conn->prepare(
+            "SELECT p.payment_method, p.payment_status,
+                    s.shipping_status, s.tracking_number
+             FROM orders o
+             LEFT JOIN payments p ON o.order_id = p.order_id
+             LEFT JOIN shipping s ON o.order_id = s.order_id
+             WHERE o.order_id = ? AND o.user_id = ?"
         );
-        $updateStmt->bind_param('si', $newStatus, $orderId);
-        $updateStmt->execute();
-        $updateStmt->close();
-
-        $shippingStmt = $conn->prepare(
-            "UPDATE shipping SET shipping_status = ?
-             WHERE order_id = ?"
-        );
-        $shippingStmt->bind_param('si', $newStatus, $orderId);
-        $shippingStmt->execute();
-        $shippingStmt->close();
-
-        $conn->commit();
-        return ['success' => true, 'message' => 'Order status updated successfully.'];
-
-    } catch (Throwable $e) {
-        $conn->rollback();
-        return ['success' => false, 'message' => $e->getMessage()];
-    } finally {
-        $conn->close();
-    }
-}
-
-/**
- * Updates shipping status independently for the admin.
- */
-function updateShippingStatus($orderId, $shippingStatus, $trackingNumber = null)
-{
-    $allowed = ['Pending', 'Preparing', 'Shipped', 'Completed', 'Cancelled'];
-
-    if (!in_array($shippingStatus, $allowed, true)) {
-        return ['success' => false, 'message' => 'Invalid shipping status.'];
-    }
-
-    $conn = getConnection();
-
-    $stmt = $conn->prepare(
-        "UPDATE shipping
-         SET shipping_status = ?, tracking_number = ?
-         WHERE order_id = ?"
-    );
-    $stmt->bind_param('ssi', $shippingStatus, $trackingNumber, $orderId);
-    $success = $stmt->execute();
-
-    $stmt->close();
-    $conn->close();
-
-    return [
-        'success' => $success,
-        'message' => $success
-            ? 'Shipping status updated successfully.'
-            : 'Failed to update shipping status.'
-    ];
-}
+        $stmt->bind_param('ii', $orderId, $userId);
+        $stmt->execute();
+        $extra = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        ?>
+ 
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Order #<?= $orderId ?></h2>
+                <span class="<?= statusBadgeClass($order->getStatus()) ?>">
+                    <?= htmlspecialchars($order->getStatus()) ?>
+                </span>
+            </div>
+ 
+            <dl class="detail-grid">
+                <dt>Date placed</dt>
+                <dd><?= htmlspecialchars((string)$order->getCreatedAt()) ?></dd>
+ 
+                <dt>Order total</dt>
+                <dd>RM <?= number_format($order->getTotalAmount(), 2) ?></dd>
+ 
+                <dt>Shipping address</dt>
+                <dd><?= nl2br(htmlspecialchars($order->getShippingAddress())) ?></dd>
+ 
+                <dt>Payment method</dt>
+                <dd><?= htmlspecialchars($extra['payment_method'] ?? 'Not recorded') ?></dd>
+ 
+                <dt>Payment status</dt>
+                <dd>
+                    <?php if (!empty($extra['payment_status'])): ?>
+                        <span class="<?= statusBadgeClass($extra['payment_status']) ?>">
+                            <?= htmlspecialchars($extra['payment_status']) ?>
+                        </span>
+                    <?php else: ?>
+                        <span class="text-muted">Not recorded</span>
+                    <?php endif; ?>
+                </dd>
+ 
+                <dt>Shipping status</dt>
+                <dd>
+                    <?php if (!empty($extra['shipping_status'])): ?>
+                        <span class="<?= statusBadgeClass($extra['shipping_status']) ?>">
+                            <?= htmlspecialchars($extra['shipping_status']) ?>
+                        </span>
+                    <?php else: ?>
+                        <span class="text-muted">Not recorded</span>
+                    <?php endif; ?>
+                </dd>
+ 
+                <dt>Tracking number</dt>
+                <dd><?= htmlspecialchars($extra['tracking_number'] ?? 'Not available') ?></dd>
+            </dl>
+ 
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th class="text-right">Quantity</th>
+                        <th class="text-right">Unit Price (RM)</th>
+                        <th class="text-right">Subtotal (RM)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($items as $item): ?>
+                        <tr>
+                            <td><?= htmlspecialchars($item['product_name']) ?></td>
+                            <td class="text-right"><?= (int)$item['quantity'] ?></td>
+                            <td class="text-right"><?= number_format($item['unit_price'], 2) ?></td>
+                            <td class="text-right"><?= number_format($item['subtotal'], 2) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+ 
+            <?php if ($order->getStatus() === 'Pending'): ?>
+                <div class="form-actions">
+                    <form method="post" action="order-history.php" class="inline-form"
+                          onsubmit="return confirm('Cancel this order?');">
+                        <input type="hidden" name="cancel_order_id" value="<?= $orderId ?>">
+                        <button type="submit" class="btn btn-danger btn-small">Cancel Order</button>
+                    </form>
+                </div>
+            <?php endif; ?>
+        </div>
+ 
+    <?php endforeach; ?>
+ 
+    <div class="form-actions">
+        <a class="btn btn-secondary" href="product-list.php">Continue Shopping</a>
+    </div>
+ 
+<?php endif; ?>
+ 
+<?php
+$conn->close();
+include __DIR__ . '/../includes/footer.php';
+?>
+ 

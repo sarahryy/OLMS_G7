@@ -1,65 +1,90 @@
 <?php
-session_start();
+/**
+ * File: profile.php
+ * Module: User & Authentication
+ * Description: Lets a signed-in user view their account details and update
+ *              their name and phone number. The email address is the account
+ *              identifier and is shown read-only.
+ * Module author: Lu'lu'
+ * Layout migrated to the shared header/footer on 27/10/2026.
+ */
+ 
+require_once __DIR__ . '/../includes/auth-guard.php';
 require_once __DIR__ . '/../services/user-service.php';
-
-if (!isset($_SESSION['userId'])) {
-    header('Location: login.php');
-    exit;
-}
-
-$userId = (int)$_SESSION['userId'];
+ 
+requireLogin();
+ 
+$userId  = (int)$_SESSION['userId'];
 $message = '';
-$error = '';
-
+$error   = '';
+ 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name = trim($_POST['name'] ?? '');
+    $name  = trim($_POST['name'] ?? '');
     $phone = trim($_POST['phone_number'] ?? '');
-
-    if (empty($name) || empty($phone)) {
-        $error = "Name and phone number cannot be empty.";
+ 
+    if ($name === '' || $phone === '') {
+        $error = 'Name and phone number cannot be empty.';
+    } elseif (updateUserProfile($userId, $name, $phone)) {
+        $_SESSION['name'] = $name;
+        $message = 'Profile updated successfully.';
     } else {
-        if (updateUserProfile($userId, $name, $phone)) {
-            $_SESSION['name'] = $name;
-            $message = "Profile updated successfully!";
-        } else {
-            $error = "Failed to update profile.";
-        }
+        $error = 'Failed to update profile.';
     }
 }
-
+ 
 $user = getUserById($userId);
+ 
+$pageTitle = 'My Profile';
+include __DIR__ . '/../includes/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>My Profile - StationeryMart</title>
-    <style>
-        .container { max-width: 500px; margin: 40px auto; background: #fff; padding: 25px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); font-family: sans-serif; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        button { padding: 10px 18px; background: #2b6cb0; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-        .alert-success { background: #c6f6d5; color: #22543d; padding: 10px; margin-bottom: 15px; border-radius: 4px; }
-        .alert-danger { background: #fed7d7; color: #9b2c2c; padding: 10px; margin-bottom: 15px; border-radius: 4px; }
-    </style>
-</head>
-<body>
-<div class="container">
-    <h2>Customer Profile</h2>
-    <p>Logged in as: <strong><?= htmlspecialchars($_SESSION['name']) ?></strong> (<?= htmlspecialchars($_SESSION['role']) ?>) | <a href="logout.php">Logout</a></p>
-    <?php if ($message): ?><div class="alert-success"><?= htmlspecialchars($message) ?></div><?php endif; ?>
-    <?php if ($error): ?><div class="alert-danger"><?= htmlspecialchars($error) ?></div><?php endif; ?>
-
-    <form method="POST" action="">
-        <div class="form-group"><label>Email (Account Identifier)</label><input type="email" value="<?= htmlspecialchars($user['email']) ?>" disabled></div>
-        <div class="form-group"><label>Full Name</label><input type="text" name="name" value="<?= htmlspecialchars($user['name']) ?>" required></div>
-        <div class="form-group"><label>Phone Number</label><input type="text" name="phone_number" value="<?= htmlspecialchars($user['phone_number']) ?>" required></div>
-        <?php if (isset($user['loyalty_points'])): ?>
-            <div class="form-group"><label>Loyalty Points</label><input type="text" value="<?= htmlspecialchars($user['loyalty_points']) ?> pts" disabled></div>
-        <?php endif; ?>
-        <button type="submit">Save Changes</button>
-    </form>
-</div>
-</body>
-</html>
+ 
+<h1 class="page-title">My Profile</h1>
+<p class="page-subtitle">
+    Signed in as <?= htmlspecialchars($_SESSION['name']) ?>
+    (<?= htmlspecialchars($_SESSION['role']) ?>)
+</p>
+ 
+<?php if ($message !== ''): ?>
+    <div class="message-success"><?= htmlspecialchars($message) ?></div>
+<?php endif; ?>
+ 
+<?php if ($error !== ''): ?>
+    <div class="message-error"><?= htmlspecialchars($error) ?></div>
+<?php endif; ?>
+ 
+<form method="post" action="profile.php">
+    <div class="form-group">
+        <label class="form-label" for="email">Email (Account Identifier)</label>
+        <input type="email" id="email" class="form-input"
+               value="<?= htmlspecialchars($user['email']) ?>" disabled>
+        <span class="form-hint">Your email cannot be changed.</span>
+    </div>
+ 
+    <div class="form-group">
+        <label class="form-label" for="name">Full Name</label>
+        <input type="text" id="name" name="name" class="form-input"
+               value="<?= htmlspecialchars($user['name']) ?>" required>
+    </div>
+ 
+    <div class="form-group">
+        <label class="form-label" for="phone_number">Phone Number</label>
+        <input type="text" id="phone_number" name="phone_number" class="form-input"
+               value="<?= htmlspecialchars($user['phone_number']) ?>" required>
+    </div>
+ 
+    <?php if (isset($user['loyalty_points'])): ?>
+        <div class="form-group">
+            <label class="form-label" for="loyalty">Loyalty Points</label>
+            <input type="text" id="loyalty" class="form-input"
+                   value="<?= htmlspecialchars($user['loyalty_points']) ?> pts" disabled>
+        </div>
+    <?php endif; ?>
+ 
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+        <a class="link-back" href="product-list.php">Back to Catalogue</a>
+    </div>
+</form>
+ 
+<?php include __DIR__ . '/../includes/footer.php'; ?>
+ 
