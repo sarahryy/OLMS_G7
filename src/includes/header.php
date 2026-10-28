@@ -70,11 +70,9 @@ if (isset($_SESSION['cart']) && $_SESSION['cart'] instanceof Cart) {
         <a class="nav-link" href="order-history.php">My Orders</a>
         <a class="nav-link" href="profile.php">My Profile</a>
  
-    <?php else: ?>
-        <!-- Guest menu -->
-        <a class="nav-link" href="product-list.php">All Products</a>
-        <a class="nav-link" href="search-product.php">Search</a>
-    <?php endif; ?>
+   <?php else: ?>
+    <!-- Guest menu: only public navigation -->
+<?php endif; ?>
  
     <span class="nav-right">
         <?php if ($isLoggedIn): ?>
@@ -84,9 +82,8 @@ if (isset($_SESSION['cart']) && $_SESSION['cart'] instanceof Cart) {
             </span>
             <a class="nav-link" href="logout.php">Logout</a>
         <?php else: ?>
-            <a class="nav-link" href="login.php">Login</a>
-            <a class="nav-link" href="register.php">Register</a>
-        <?php endif; ?>
+    <!-- Login and Register links hidden for guests -->
+<?php endif; ?>
     </span>
 </nav>
  

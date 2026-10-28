@@ -93,18 +93,31 @@ function loginUser(string $email, string $password): ?array {
 /**
  * Fetches user profile data by ID.
  */
+
 function getUserById(int $userId): ?array {
     $conn = getConnection();
-    $sql = "SELECT u.user_id, u.name, u.email, u.phone_number, u.role, c.loyalty_points 
-            FROM users u 
-            LEFT JOIN customers c ON u.user_id = c.customer_id
-            WHERE u.user_id = ? LIMIT 1";
+
+    $sql = "SELECT
+                u.user_id,
+                u.name,
+                u.email,
+                u.phone_number,
+                u.role,
+                c.loyalty_points
+            FROM users u
+            LEFT JOIN customers c ON u.user_id = c.user_id
+            WHERE u.user_id = ?
+            LIMIT 1";
+
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $userId);
     $stmt->execute();
+
     $data = $stmt->get_result()->fetch_assoc();
+
     $stmt->close();
     $conn->close();
+
     return $data ?: null;
 }
 
