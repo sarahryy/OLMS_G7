@@ -265,6 +265,7 @@ function getAllOrdersForAdmin()
 /**
  * Update the overall order status.
  */
+
 function updateOrderStatus($orderId, $newStatus)
 {
     $allowedStatuses = [
@@ -273,7 +274,10 @@ function updateOrderStatus($orderId, $newStatus)
     ];
 
     if (!in_array($newStatus, $allowedStatuses, true)) {
-        return false;
+        return [
+            'success' => false,
+            'message' => 'Invalid order status.'
+        ];
     }
 
     $conn = getConnection();
@@ -281,18 +285,44 @@ function updateOrderStatus($orderId, $newStatus)
     $stmt = $conn->prepare(
         "UPDATE orders SET status = ? WHERE order_id = ?"
     );
+
+    if (!$stmt) {
+        $dbError = $conn->error;
+        $conn->close();
+
+        return [
+            'success' => false,
+            'message' => 'Unable to prepare order update: ' . $dbError
+        ];
+    }
+
     $stmt->bind_param('si', $newStatus, $orderId);
     $success = $stmt->execute();
 
+    if (!$success) {
+        $dbError = $stmt->error;
+        $stmt->close();
+        $conn->close();
+
+        return [
+            'success' => false,
+            'message' => 'Order update failed: ' . $dbError
+        ];
+    }
+
     $stmt->close();
+    $conn->close();
 
-    return $success;
+    return [
+        'success' => true,
+        'message' => 'Order status updated successfully.'
+    ];
 }
-
 
 /**
  * Update the shipping status and tracking number for an order.
  */
+
 function updateShippingStatus($orderId, $shippingStatus, $trackingNumber = '')
 {
     $allowedStatuses = [
@@ -306,11 +336,15 @@ function updateShippingStatus($orderId, $shippingStatus, $trackingNumber = '')
         !in_array($shippingStatus, $allowedStatuses, true) ||
         strlen($trackingNumber) > 100
     ) {
-        return false;
+        return [
+            'success' => false,
+            'message' => 'Invalid shipping status or tracking number.'
+        ];
     }
 
     $conn = getConnection();
 
+    // Check whether a shipping record already exists.
     $stmt = $conn->prepare(
         "SELECT shipping_id
          FROM shipping
@@ -318,13 +352,18 @@ function updateShippingStatus($orderId, $shippingStatus, $trackingNumber = '')
          ORDER BY shipping_id DESC
          LIMIT 1"
     );
+
+    if (!$stmt) {
+        return ['success' => false, 'message' => 'Unable to check shipping record.'];
+    }
+
     $stmt->bind_param('i', $orderId);
     $stmt->execute();
-    $result = $stmt->get_result();
-    $shipping = $result->fetch_assoc();
+    $shipping = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
     if ($shipping) {
+        // Update existing shipping record.
         $shippingId = (int) $shipping['shipping_id'];
 
         $update = $conn->prepare(
@@ -332,48 +371,78 @@ function updateShippingStatus($orderId, $shippingStatus, $trackingNumber = '')
              SET shipping_status = ?, tracking_number = ?
              WHERE shipping_id = ?"
         );
+
+        if (!$update) {
+            return ['success' => false, 'message' => 'Unable to prepare shipping update.'];
+        }
+
         $update->bind_param(
             'ssi',
             $shippingStatus,
             $trackingNumber,
             $shippingId
         );
+
         $success = $update->execute();
         $update->close();
 
-        return $success;
+    } else {
+        // Get the shipping address from the order.
+        $addressStmt = $conn->prepare(
+            "SELECT shipping_address
+             FROM orders
+             WHERE order_id = ?"
+        );
+
+        if (!$addressStmt) {
+            return ['success' => false, 'message' => 'Unable to retrieve shipping address.'];
+        }
+
+        $addressStmt->bind_param('i', $orderId);
+        $addressStmt->execute();
+        $order = $addressStmt->get_result()->fetch_assoc();
+        $addressStmt->close();
+
+        if (!$order) {
+            return ['success' => false, 'message' => 'Order or shipping address not found.'];
+        }
+
+        $address = $order['shipping_address'];
+
+        // Create a new shipping record.
+        $insert = $conn->prepare(
+            "INSERT INTO shipping
+                (order_id, shipping_address, shipping_status, tracking_number)
+             VALUES (?, ?, ?, ?)"
+        );
+
+        if (!$insert) {
+            return ['success' => false, 'message' => 'Unable to prepare shipping record.'];
+        }
+
+        $insert->bind_param(
+            'isss',
+            $orderId,
+            $address,
+            $shippingStatus,
+            $trackingNumber
+        );
+
+        $success = $insert->execute();
+        $insert->close();
     }
 
-    // If a shipping record is missing, create it using the order address.
-    $addressStmt = $conn->prepare(
-        "SELECT shipping_address FROM orders WHERE order_id = ?"
-    );
-    $addressStmt->bind_param('i', $orderId);
-    $addressStmt->execute();
-    $addressResult = $addressStmt->get_result();
-    $order = $addressResult->fetch_assoc();
-    $addressStmt->close();
+    $conn->close();
 
-    if (!$order) {
-        return false;
+    if ($success) {
+        return [
+            'success' => true,
+            'message' => 'Shipping status updated successfully.'
+        ];
     }
 
-    $address = $order['shipping_address'];
-
-    $insert = $conn->prepare(
-        "INSERT INTO shipping
-            (order_id, shipping_address, shipping_status, tracking_number)
-         VALUES (?, ?, ?, ?)"
-    );
-    $insert->bind_param(
-        'isss',
-        $orderId,
-        $address,
-        $shippingStatus,
-        $trackingNumber
-    );
-    $success = $insert->execute();
-    $insert->close();
-
-    return $success;
+    return [
+        'success' => false,
+        'message' => 'Failed to update shipping. ' . $conn->error
+    ];
 }
