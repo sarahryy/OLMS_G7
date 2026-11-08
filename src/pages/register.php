@@ -15,35 +15,52 @@ require_once __DIR__ . '/../services/user-service.php';
 $errors         = [];
 $successMessage = '';
  
+require_once __DIR__ . '/../services/validator.php';
+require_once __DIR__ . '/../services/user-service.php';
+
+$errors = [];
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name            = trim($_POST['name'] ?? '');
-    $email           = trim($_POST['email'] ?? '');
-    $phone           = trim($_POST['phone_number'] ?? '');
-    $password        = $_POST['password'] ?? '';
+    // 1. Sanitize & Assert Inputs
+    $name = Validator::sanitizeString($_POST['name'] ?? '');
+    $email = Validator::validateEmail($_POST['email'] ?? null);
+    $phone = Validator::validatePhone($_POST['phone_number'] ?? null);
+    $password = $_POST['password'] ?? '';
     $confirmPassword = $_POST['confirm_password'] ?? '';
- 
-    if ($name === '') {
-        $errors[] = 'Name is required.';
+
+    // 2. Guard Clause: Empty string & out-of-bounds name length
+    if (empty($name) || strlen($name) < 2 || strlen($name) > 150) {
+        $errors[] = "Full name must be between 2 and 150 characters.";
     }
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = 'Please provide a valid email address.';
+
+    // 3. Guard Clause: Malformed email syntax
+    if ($email === null) {
+        $errors[] = "Please provide a valid email address (e.g., user@example.com).";
     }
-    if ($phone === '') {
-        $errors[] = 'Phone number is required.';
+
+    // 4. Guard Clause: Phone format
+    if ($phone === null) {
+        $errors[] = "Phone number must contain between 9 and 15 digits.";
     }
-    if (strlen($password) < 8) {
-        $errors[] = 'Password must be at least 8 characters long.';
+
+    // 5. Guard Clause: Password strength and match
+    if (!Validator::validatePassword($password)) {
+        $errors[] = "Password must be between 8 and 72 characters.";
+    } elseif ($password !== $confirmPassword) {
+        $errors[] = "Passwords do not match.";
     }
-    if ($password !== $confirmPassword) {
-        $errors[] = 'Passwords do not match.';
-    }
- 
-    if (empty($errors)) {
-        $customer = new Customer($name, $email, $password, $phone);
-        if (registerCustomer($customer)) {
-            $successMessage = 'Account registered successfully.';
+
+    // 6. Execution & HTTP Status Handling
+    if (!empty($errors)) {
+        http_response_code(422); // 422 Unprocessable Entity
+    } else {
+        $registered = registerCustomer($name, $email, $password, $phone);
+        if (!$registered) {
+            http_response_code(409); // 409 Conflict: Duplicate record or DB constraint failure
+            $errors[] = "Email is already registered or a system error occurred.";
         } else {
-            $errors[] = 'Email is already registered, or a database error occurred.';
+            header("Location: login.php?registered=1");
+            exit();
         }
     }
 }
