@@ -537,3 +537,30 @@ body {
     }
 }
  
+.payment-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    border: 1px solid #b9bec7;
+    border-radius: 5px;
+    cursor: pointer;
+    background-color: #ffffff;
+}
+ 
+.payment-option:hover {
+    border-color: #1a3d6d;
+    background-color: #f8f9fb;
+}
+ 
+.payment-option input[type="radio"] {
+    margin-top: 3px;
+    flex-shrink: 0;
+}
+ 
+.payment-option .form-hint {
+    display: block;
+    margin-top: 2px;
+}
+ 

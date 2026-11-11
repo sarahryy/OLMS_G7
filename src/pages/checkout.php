@@ -3,10 +3,17 @@
  * File: checkout.php
  * Module: Order Module
  * Description: Final step of the purchase flow. Shows an order summary built
- *              from the session cart, collects the delivery address, and
- *              converts the cart into a confirmed order.
+ *              from the session cart, collects the delivery address and the
+ *              payment method, and converts the cart into a confirmed order.
+ *
+ *              Two payment methods are offered. Cash on Delivery leaves the
+ *              payment Pending and sends the customer straight to their order
+ *              history. SiberQR sends them to payment-qr.php, where the
+ *              payment gateway middleware issues a QR code and waits for the
+ *              bank to confirm the transfer.
+ *
  * Module author: Nad
- * Layout migrated to the shared header/footer on 27/10/2026.
+ * QR payment option added for Lab 7 & 8 by Siti Sarah Raihanah, 11/11/2026.
  */
  
 require_once __DIR__ . '/../includes/auth-guard.php';
@@ -21,19 +28,59 @@ $grandTotal = $cart->getTotal();
  
 $errorMessage = '';
  
-// Process the checkout when the form is submitted
+// Payment methods this checkout accepts. Keeping them in one array means
+// the form and the validation cannot drift apart.
+$paymentMethods = [
+    'cod' => 'Cash on Delivery (COD)',
+    'qr'  => 'QR Payment by Bank Siber (SiberQR)'
+];
+ 
+$selectedMethod = $_POST['payment_method'] ?? 'qr';
+ 
+// ---- Process the checkout when the form is submitted ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+ 
     $shippingAddress = trim($_POST['shipping_address'] ?? '');
  
-    $result = createOrderFromCart((int)$_SESSION['userId'], $shippingAddress);
+    // Validate the submitted method against the list above rather than
+    // trusting it. A crafted request cannot introduce a payment method
+    // the system does not support.
+    if (!array_key_exists($selectedMethod, $paymentMethods)) {
+        $errorMessage = 'Please choose a valid payment method.';
+    } elseif ($shippingAddress === '') {
+        $errorMessage = 'A delivery address is required.';
+    } elseif (strlen($shippingAddress) > 500) {
+        $errorMessage = 'The delivery address is too long. Please shorten it.';
+    } else {
  
-    if ($result['success']) {
-        $_SESSION['orderSuccess'] = 'Your order has been placed successfully.';
-        header('Location: order-history.php');
-        exit;
+        $methodLabel = ($selectedMethod === 'qr')
+            ? 'QR Payment (SiberQR)'
+            : 'Cash on Delivery';
+ 
+        $result = createOrderFromCart(
+            (int)$_SESSION['userId'],
+            $shippingAddress,
+            $methodLabel
+        );
+ 
+        if ($result['success']) {
+ 
+            if ($selectedMethod === 'qr') {
+                // Hand over to the payment gateway. The order exists and is
+                // Pending; it stays that way until the bank confirms.
+                header('Location: payment-qr.php?order_id='
+                     . (int)($result['orderId'] ?? 0));
+                exit;
+            }
+ 
+            $_SESSION['orderSuccess'] =
+                'Your order has been placed successfully. Please pay on delivery.';
+            header('Location: order-history.php');
+            exit;
+        }
+ 
+        $errorMessage = $result['message'];
     }
- 
-    $errorMessage = $result['message'];
 }
  
 $pageTitle = 'Checkout';
@@ -41,7 +88,7 @@ include __DIR__ . '/../includes/header.php';
 ?>
  
 <h1 class="page-title">Checkout</h1>
-<p class="page-subtitle">Review your order and confirm your delivery address</p>
+<p class="page-subtitle">Review your order, choose how to pay, and confirm your address</p>
  
 <?php if ($errorMessage !== ''): ?>
     <div class="message-error"><?= htmlspecialchars($errorMessage) ?></div>
@@ -88,17 +135,41 @@ include __DIR__ . '/../includes/header.php';
         </tfoot>
     </table>
  
-    <p class="page-subtitle" style="margin-top:14px;">
-        Payment method: <strong>Cash on Delivery (COD)</strong>
-    </p>
- 
-    <h2 class="section-title">Shipping Information</h2>
- 
     <form method="post" action="checkout.php">
+ 
+        <h2 class="section-title">Payment Method</h2>
+ 
+        <div class="form-group">
+            <label class="payment-option">
+                <input type="radio" name="payment_method" value="qr"
+                    <?= $selectedMethod === 'qr' ? 'checked' : '' ?>>
+                <span>
+                    <strong>QR Payment by Bank Siber (SiberQR)</strong><br>
+                    <span class="form-hint">
+                        Scan a QR code with your banking app. Your order moves
+                        straight into preparation once the bank confirms the transfer.
+                    </span>
+                </span>
+            </label>
+ 
+            <label class="payment-option">
+                <input type="radio" name="payment_method" value="cod"
+                    <?= $selectedMethod === 'cod' ? 'checked' : '' ?>>
+                <span>
+                    <strong>Cash on Delivery (COD)</strong><br>
+                    <span class="form-hint">
+                        Pay the courier when your order arrives.
+                    </span>
+                </span>
+            </label>
+        </div>
+ 
+        <h2 class="section-title">Shipping Information</h2>
+ 
         <div class="form-group">
             <label class="form-label" for="shipping_address">Delivery Address</label>
             <textarea id="shipping_address" name="shipping_address"
-                      class="form-textarea" rows="5"
+                      class="form-textarea" rows="5" maxlength="500"
                       placeholder="Enter your full delivery address"
                       required><?= htmlspecialchars($_POST['shipping_address'] ?? '') ?></textarea>
             <span class="form-hint">Include unit number, street, postcode and state.</span>
