@@ -23,8 +23,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $phone = trim($_POST['phone_number'] ?? '');
  
     if ($name === '' || $phone === '') {
-        $error = 'Name and phone number cannot be empty.';
-    } elseif (updateUserProfile($userId, $name, $phone)) {
+    $error = 'Name and phone number cannot be empty.';
+} elseif (!preg_match("/^[a-zA-Z\s'-]+$/", $name)) {
+    $error = 'Name can only contain letters, spaces, apostrophes and hyphens.';
+} elseif (!preg_match('/^[0-9+\-\s]{8,15}$/', $phone)) {
+    $error = 'Please enter a valid phone number.';
+} elseif (updateUserProfile($userId, $name, $phone)) {
         $_SESSION['name'] = $name;
         $message = 'Profile updated successfully.';
     } else {
