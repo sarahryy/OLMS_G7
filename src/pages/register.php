@@ -23,14 +23,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $confirmPassword = $_POST['confirm_password'] ?? '';
  
     if ($name === '') {
-        $errors[] = 'Name is required.';
-    }
+    $errors[] = 'Name is required.';
+} elseif (!preg_match("/^[a-zA-Z\s'-]+$/", $name)) {
+    $errors[] = 'Name can only contain letters, spaces, apostrophes and hyphens.';
+}
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $errors[] = 'Please provide a valid email address.';
     }
     if ($phone === '') {
-        $errors[] = 'Phone number is required.';
-    }
+    $errors[] = 'Phone number is required.';
+} elseif (!preg_match('/^[0-9+\-\s]{8,15}$/', $phone)) {
+    $errors[] = 'Please enter a valid phone number.';
+}
     if (strlen($password) < 8) {
         $errors[] = 'Password must be at least 8 characters long.';
     }
