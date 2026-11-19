@@ -24,7 +24,7 @@
  *              cURL error number themselves.
  *
  * Author: Siti Sarah Raihanah Binti Azizan
- * Created: 11/11/2026
+ * Updated: Sharifah Sofiyyah Lu'lu' Binti Syed Firdaus Hilmi (Testability & Input Guards)
  */
 
 require_once __DIR__ . '/../config/db-config.php';
@@ -37,46 +37,50 @@ require_once __DIR__ . '/../api/bank/bank-config.php';
 // LAN address, behind a tunnel and on a deployed host without being edited.
 // SCRIPT_NAME points at the running script inside /src/<folder>/, so two
 // levels up is /src.
-$scriptDir = rtrim(dirname(dirname($_SERVER['SCRIPT_NAME'] ?? '/src/pages/x.php')), '/\\');
+$scriptDir  = rtrim(dirname(dirname($_SERVER['SCRIPT_NAME'] ?? '/src/pages/x.php')), '/\\');
 $publicHost = $_SERVER['HTTP_HOST'] ?? 'localhost';
 $proto      = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '';
 $scheme     = $proto !== ''
     ? $proto
     : ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
 
-// The path to the bank, shared by both addresses below.
-define('SIBER_API_PATH', $scriptDir . '/api/bank/index.php');
+// Constants are wrapped in !defined() guards so unit tests (PaymentGatewayTest.php)
+// can override SIBER_API_LOOPBACK and SIBER_API_PUBLIC to an unreachable port
+// (e.g., http://127.0.0.1:9999) without triggering PHP constant redefinition warnings.
+if (!defined('SIBER_API_PATH')) {
+    define('SIBER_API_PATH', $scriptDir . '/api/bank/index.php');
+}
 
-// The address a browser would use. Kept for reference and used as a
-// fallback when the loopback address is not reachable.
-define('SIBER_API_PUBLIC', $scheme . '://' . $publicHost . SIBER_API_PATH);
+if (!defined('SIBER_API_PUBLIC')) {
+    define('SIBER_API_PUBLIC', $scheme . '://' . $publicHost . SIBER_API_PATH);
+}
 
-// The address this server uses to reach the bank. The bank runs on the same
-// machine, so the call is made over the loopback interface: it never leaves
-// the server, needs no DNS, and avoids TLS entirely. This matters behind a
-// tunnel or a reverse proxy, where the public address would route the
-// request out to the internet and back in again, and where a development
-// PHP build often cannot verify the certificate on the way.
-define('SIBER_API_LOOPBACK', 'http://127.0.0.1' . SIBER_API_PATH);
+if (!defined('SIBER_API_LOOPBACK')) {
+    define('SIBER_API_LOOPBACK', 'http://127.0.0.1' . SIBER_API_PATH);
+}
 
-// The host name the loopback request claims to be for. Shared hosting
-// serves many sites from one address, so without this header the request
-// would reach the wrong virtual host.
-define('SIBER_API_HOST_HEADER', $publicHost);
+if (!defined('SIBER_API_HOST_HEADER')) {
+    define('SIBER_API_HOST_HEADER', $publicHost);
+}
 
 // Connect and read timeouts, in seconds. A bank that does not answer
 // within this window is treated as unavailable rather than left to hang.
-// The loopback attempt gets a shorter connect timeout because a server
-// talking to itself either answers immediately or not at all.
-define('SIBER_CONNECT_TIMEOUT', 3);
-define('SIBER_LOOPBACK_CONNECT_TIMEOUT', 2);
-define('SIBER_READ_TIMEOUT', 8);
+if (!defined('SIBER_CONNECT_TIMEOUT')) {
+    define('SIBER_CONNECT_TIMEOUT', 3);
+}
+
+if (!defined('SIBER_LOOPBACK_CONNECT_TIMEOUT')) {
+    define('SIBER_LOOPBACK_CONNECT_TIMEOUT', 2);
+}
+
+if (!defined('SIBER_READ_TIMEOUT')) {
+    define('SIBER_READ_TIMEOUT', 8);
+}
 
 // Order status the shop advances to once payment is confirmed.
-// 'Preparing' rather than 'Shipped': nothing has physically been
-// dispatched yet, and the admin screen expects the sequence to advance
-// one stage at a time.
-define('SIBER_STATUS_AFTER_PAYMENT', 'Preparing');
+if (!defined('SIBER_STATUS_AFTER_PAYMENT')) {
+    define('SIBER_STATUS_AFTER_PAYMENT', 'Preparing');
+}
 
 
 /**
@@ -111,7 +115,7 @@ function logGatewayCall($orderId, $endpoint, $httpStatus, $outcome, $message, $d
         $stmt->close();
         $conn->close();
     } catch (Throwable $e) {
-        // Deliberately swallowed. See the note above.
+        // Deliberately swallowed so audit log failures never abort a payment.
         error_log('payment-gateway: could not write audit log: ' . $e->getMessage());
     }
 }
@@ -123,12 +127,11 @@ function logGatewayCall($orderId, $endpoint, $httpStatus, $outcome, $message, $d
  * Separated from callBankApi() so the same request can be tried over the
  * loopback interface first and over the public address only if that fails.
  *
- * @param string      $base       Full URL of the bank endpoint
- * @param string      $action     Bank action to call
- * @param string      $method     GET or POST
- * @param array       $payload    Query string for GET, JSON body for POST
- * @param string|null $hostHeader Host header to send, or null to let the
- *                                URL decide
+ * @param string      $base           Full URL of the bank endpoint
+ * @param string      $action         Bank action to call
+ * @param string      $method         GET or POST
+ * @param array       $payload        Query string for GET, JSON body for POST
+ * @param string|null $hostHeader     Host header to send, or null to let the URL decide
  * @param int         $connectTimeout Connect timeout in seconds
  * @return array ['raw' => string|false, 'status' => int|null,
  *                'error' => string, 'ms' => int]
@@ -151,8 +154,6 @@ function attemptBankCall($base, $action, $method, array $payload,
         'X-Merchant-Id: ' . SIBER_MERCHANT_ID
     ];
 
-    // Shared hosting serves many sites from one address, so a loopback
-    // request must say which site it is for.
     if ($hostHeader !== null && $hostHeader !== '') {
         $headers[] = 'Host: ' . $hostHeader;
     }
@@ -192,7 +193,7 @@ function attemptBankCall($base, $action, $method, array $payload,
                 'method'        => $method,
                 'header'        => implode("\r\n", $headers) . "\r\n",
                 'content'       => $body,
-                'timeout'       => SIBER_READ_TIMEOUT,
+                'timeout'       => $connectTimeout,
                 'ignore_errors' => true
             ]
         ]);
@@ -222,12 +223,6 @@ function attemptBankCall($base, $action, $method, array $payload,
  * standard result array, so the caller handles one shape rather than a
  * mixture of exceptions, false values and HTTP codes.
  *
- * The bank runs on the same server, so the loopback address is tried first.
- * That keeps the request inside the machine, which is both faster and
- * necessary behind a tunnel or reverse proxy, where the public address
- * would route the call out to the internet and back. The public address is
- * used only if loopback produces nothing.
- *
  * @param string   $action  Bank action: create, status, confirm or cancel
  * @param string   $method  GET or POST
  * @param array    $payload Request body for POST, or query string for GET
@@ -236,6 +231,20 @@ function attemptBankCall($base, $action, $method, array $payload,
  */
 function callBankApi($action, $method, array $payload = [], $orderId = null)
 {
+    $action = trim((string)$action);
+    $method = strtoupper(trim((string)$method));
+
+    // Defensive Guard: Validate action and HTTP method before opening network sockets
+    if (!in_array($action, ['create', 'status', 'confirm', 'cancel'], true)
+        || !in_array($method, ['GET', 'POST'], true)) {
+        return [
+            'success' => false,
+            'code'    => 'INVALID_GATEWAY_REQUEST',
+            'message' => 'Unsupported payment gateway action or HTTP method.',
+            'data'    => []
+        ];
+    }
+
     // Loopback first, public address as a fallback.
     $attempt = attemptBankCall(
         SIBER_API_LOOPBACK, $action, $method, $payload,
@@ -296,7 +305,7 @@ function callBankApi($action, $method, array $payload = [], $orderId = null)
 
     // --- The bank answered with an error of its own ---
     if ($httpStatus === null || $httpStatus >= 400) {
-        $outcome = ($httpStatus !== null && $httpStatus >= 500) ? 'ServerError' : 'ClientError';
+        $outcome  = ($httpStatus !== null && $httpStatus >= 500) ? 'ServerError' : 'ClientError';
         $bankCode = (string)($decoded['code'] ?? 'UNKNOWN');
 
         if ($bankCode === 'BAD_SIGNATURE') {
@@ -308,8 +317,6 @@ function callBankApi($action, $method, array $payload = [], $orderId = null)
             $bankCode . ': ' . (string)($decoded['message'] ?? ''), $durationMs
         );
 
-        // Rate limiting is reported distinctly so the caller can ask the
-        // customer to wait rather than suggesting the payment failed.
         if ($httpStatus === 429) {
             return [
                 'success' => false,
@@ -411,13 +418,14 @@ function createQrPayment($orderId)
  */
 function getQrPaymentStatus($qrId, $orderId = null)
 {
-    $qrId = trim((string)$qrId);
+    $qrId = trim(str_replace("\0", '', (string)$qrId));
 
-    if ($qrId === '') {
+    // Defensive Guard: Reject empty or malformed qr_id before opening network socket
+    if ($qrId === '' || !preg_match('/^[A-Za-z0-9_-]{6,32}$/', $qrId)) {
         return [
             'success' => false,
             'code'    => 'INVALID_QR',
-            'message' => 'No payment reference was supplied.',
+            'message' => 'The payment reference format is invalid.',
             'data'    => []
         ];
     }
@@ -450,7 +458,16 @@ function getQrPaymentStatus($qrId, $orderId = null)
 function settleQrPayment($orderId, $qrId)
 {
     $orderId = (int)$orderId;
-    $qrId    = trim((string)$qrId);
+    $qrId    = trim(str_replace("\0", '', (string)$qrId));
+
+    if ($orderId <= 0) {
+        return [
+            'success' => false,
+            'code'    => 'INVALID_ORDER',
+            'message' => 'That order reference is not valid.',
+            'data'    => []
+        ];
+    }
 
     // --- Ask the bank; never trust the browser ---
     $bank = getQrPaymentStatus($qrId, $orderId);
@@ -459,10 +476,10 @@ function settleQrPayment($orderId, $qrId)
         return $bank;
     }
 
-    $state     = (string)($bank['data']['payment_state'] ?? '');
-    $bankAmt   = round((float)($bank['data']['amount'] ?? 0), 2);
-    $bankRef   = (string)($bank['data']['reference_no'] ?? '');
-    $orderRef  = (string)($bank['data']['order_ref'] ?? '');
+    $state    = (string)($bank['data']['payment_state'] ?? '');
+    $bankAmt  = round((float)($bank['data']['amount'] ?? 0), 2);
+    $bankRef  = (string)($bank['data']['reference_no'] ?? '');
+    $orderRef = (string)($bank['data']['order_ref'] ?? '');
 
     if ($state !== 'Paid') {
         return [
