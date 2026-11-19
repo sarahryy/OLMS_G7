@@ -3,26 +3,19 @@
  * File: bank-app.php
  * Module: Bank Siber (simulated mobile banking application)
  * Description: Stands in for the Bank Siber mobile app that a customer
- *              would open by scanning a SiberQR code. It is intentionally
- *              a separate interface with its own styling: it belongs to
- *              the bank, not to StationeryMart, and it deliberately does
- *              not use the shop's header, footer or session.
- *
- *              It reads the transaction from the bank API, shows the payer
- *              what they are about to pay, and posts their approval back to
- *              the bank. The shop learns about the payment only by polling
- *              the bank afterwards, exactly as a real merchant would.
+ *              would open by scanning a SiberQR code. Hardened with strict
+ *              qr_id format validation on GET and POST, action whitelisting,
+ *              payer input sanitization, explicit HTTP status codes, and
+ *              UTF-8 HTML output escaping.
  *
  * Author: Siti Sarah Raihanah Binti Azizan
- * Created: 11/11/2026
+ * Audited & Hardened by: Sharifah Sofiyyah Lu'lu' Binti Syed Firdaus Hilmi
  */
 
 require_once __DIR__ . '/../api/bank/bank-config.php';
 
-// This page is part of the bank, so it calls the bank API over HTTP in the
-// same way the merchant does, rather than including the bank's database code.
-// The address is derived from the request so the same file runs on a local
-// WAMP install, behind a tunnel and on a deployed host without being edited.
+// Derive API endpoints dynamically so the page runs across local WAMP,
+// LAN addresses, and tunnels without hardcoded hostnames.
 $bankProto  = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '';
 $bankScheme = $bankProto !== ''
     ? $bankProto
@@ -30,28 +23,21 @@ $bankScheme = $bankProto !== ''
 $bankRoot   = rtrim(dirname(dirname($_SERVER['SCRIPT_NAME'] ?? '/src/pages/x.php')), '/\\');
 $bankHost   = $_SERVER['HTTP_HOST'] ?? 'localhost';
 
-// The API runs on this same server, so the call is made over the loopback
-// interface. It never leaves the machine, needs no DNS and avoids TLS, which
-// matters behind a tunnel where the public address would route the request
-// out to the internet and back in again.
-define('BANK_API',          'http://127.0.0.1' . $bankRoot . '/api/bank/index.php');
-define('BANK_API_PUBLIC',   $bankScheme . '://' . $bankHost . $bankRoot . '/api/bank/index.php');
-define('BANK_API_HOST',     $bankHost);
+define('BANK_API',        'http://127.0.0.1' . $bankRoot . '/api/bank/index.php');
+define('BANK_API_PUBLIC', $bankScheme . '://' . $bankHost . $bankRoot . '/api/bank/index.php');
+define('BANK_API_HOST',   $bankHost);
 
 /**
- * Calls the bank API and decodes the reply.
+ * Calls the bank API and decodes the JSON reply.
  *
  * @param string $action  Bank action to call
  * @param string $method  GET or POST
  * @param array  $payload Query string for GET, JSON body for POST
- * @return array|null Decoded reply, or null when the call failed
+ * @return array|null Decoded reply, or null when the transport call failed
  */
 function bankCall($action, $method, array $payload = [])
 {
-    // Loopback first, then the public address if the server cannot reach
-    // itself that way.
     foreach ([BANK_API, BANK_API_PUBLIC] as $base) {
-
         $url = $base . '?action=' . urlencode($action);
 
         if ($method === 'GET' && $payload) {
@@ -60,8 +46,6 @@ function bankCall($action, $method, array $payload = [])
 
         $header = "Content-Type: application/json\r\n";
 
-        // A loopback request must name the site it is for, because one
-        // address may serve several.
         if ($base === BANK_API) {
             $header .= 'Host: ' . BANK_API_HOST . "\r\n";
         }
@@ -82,7 +66,7 @@ function bankCall($action, $method, array $payload = [])
         $raw = @file_get_contents($url, false, stream_context_create($opts));
 
         if ($raw === false || $raw === '') {
-            continue;   // try the next address
+            continue;
         }
 
         $decoded = json_decode($raw, true);
@@ -95,63 +79,95 @@ function bankCall($action, $method, array $payload = [])
     return null;
 }
 
-$qrId    = trim((string)($_GET['qr_id'] ?? ''));
-$notice  = '';
-$isError = false;
-$done    = false;
-$txn     = null;
+// 1. Input Sanitization & Format Assertion for qr_id (GET and POST)
+$rawGetQr  = str_replace("\0", '', (string)($_GET['qr_id'] ?? ''));
+$rawPostQr = str_replace("\0", '', (string)($_POST['qr_id'] ?? ''));
+$qrId      = trim($rawPostQr !== '' ? $rawPostQr : $rawGetQr);
 
-if ($qrId === '') {
-    $notice  = 'No transaction code was supplied.';
+$payerInput = 'Bank Siber Customer';
+$notice     = '';
+$isError    = false;
+$done       = false;
+$txn        = null;
+
+// Guard Clause: Reject missing or malformed qr_id before making any API request
+if ($qrId === '' || !preg_match('/^[A-Za-z0-9_-]{6,32}$/', $qrId)) {
+    http_response_code(400); // 400 Bad Request
+    $notice  = 'Invalid or missing transaction code (qr_id).';
     $isError = true;
 } else {
-
-    // ---- Handle the payer tapping Confirm or Cancel ----
+    // 2. Handle POST Payment Approval or Cancellation Defensively
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $action = $_POST['action'] ?? '';
+        $action = trim(str_replace("\0", '', (string)($_POST['action'] ?? '')));
 
-        if ($action === 'confirm') {
-            $payer  = trim((string)($_POST['payer_name'] ?? '')) ?: 'Bank Siber Customer';
+        // Guard Clause: Whitelist allowed POST actions
+        if (!in_array($action, ['confirm', 'cancel'], true)) {
+            http_response_code(400); // 400 Bad Request
+            $notice  = 'Invalid payment action requested.';
+            $isError = true;
+        } elseif ($action === 'confirm') {
+            // Sanitize payer name (strip null bytes, trim, clamp to VARCHAR(100))
+            $rawPayer   = trim(str_replace("\0", '', (string)($_POST['payer_name'] ?? '')));
+            $payer      = $rawPayer !== '' ? mb_substr($rawPayer, 0, 100, 'UTF-8') : 'Bank Siber Customer';
+            $payerInput = $payer;
+
             $result = bankCall('confirm', 'POST', [
                 'qr_id'      => $qrId,
                 'payer_name' => $payer
             ]);
 
             if ($result === null) {
+                http_response_code(502); // 502 Bad Gateway
                 $notice  = 'Could not reach Bank Siber. No money has left your account.';
                 $isError = true;
             } elseif (($result['status'] ?? '') === 'ok') {
                 $done   = true;
-                $notice = 'Payment approved. Reference '
-                        . ($result['reference_no'] ?? '—');
+                $notice = 'Payment approved. Reference ' . (string)($result['reference_no'] ?? '—');
             } else {
+                http_response_code(409); // 409 Conflict / Declined
                 $notice  = (string)($result['message'] ?? 'The transfer was declined.');
                 $isError = true;
             }
-
         } elseif ($action === 'cancel') {
-            bankCall('cancel', 'POST', ['qr_id' => $qrId]);
-            $notice  = 'Payment cancelled. You can close this window.';
-            $isError = true;
+            $cancelResult = bankCall('cancel', 'POST', ['qr_id' => $qrId]);
+            if ($cancelResult === null) {
+                http_response_code(502);
+                $notice  = 'Could not reach Bank Siber to cancel the transaction.';
+                $isError = true;
+            } else {
+                $notice  = 'Payment cancelled. You can close this window.';
+                $isError = true;
+            }
         }
     }
 
-    // ---- Read the current state of the transaction ----
+    // 3. Read Current Transaction State from Bank API
     $status = bankCall('status', 'GET', ['qr_id' => $qrId]);
 
     if ($status === null) {
+        http_response_code(502);
         $notice  = 'Could not reach Bank Siber. Please try again.';
         $isError = true;
     } elseif (($status['status'] ?? '') !== 'ok') {
+        http_response_code(404);
         $notice  = (string)($status['message'] ?? 'This transaction is not available.');
         $isError = true;
     } else {
         $txn = $status;
-        if ($txn['payment_state'] === 'Paid') {
+        if (($txn['payment_state'] ?? '') === 'Paid') {
             $done = true;
         }
     }
 }
+
+// Prepare strictly escaped output values
+$escNotice     = htmlspecialchars($notice, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$escMerchantId = htmlspecialchars((string)($txn['merchant_id'] ?? 'MERCH-STATIONERYMART-001'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$escOrderRef   = htmlspecialchars((string)($txn['order_ref'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$escRefNo      = htmlspecialchars((string)($txn['reference_no'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$escAmount     = htmlspecialchars(number_format((float)($txn['amount'] ?? 0), 2), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$escPayerInput = htmlspecialchars($payerInput, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$escQrIdAttr   = htmlspecialchars($qrId, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -271,7 +287,7 @@ if ($qrId === '') {
 
         <?php if ($notice !== ''): ?>
             <div class="note <?= $isError ? 'bad' : 'ok' ?>">
-                <?= htmlspecialchars($notice) ?>
+                <?= $escNotice ?>
             </div>
         <?php endif; ?>
 
@@ -281,10 +297,12 @@ if ($qrId === '') {
             <p style="text-align:center;font-size:15px;margin:0 0 4px;">Transfer complete</p>
             <?php if ($txn): ?>
                 <p style="text-align:center;font-size:13px;color:#6b7b76;margin:0 0 18px;">
-                    RM <?= number_format((float)$txn['amount'], 2) ?> paid to StationeryMart
+                    RM <?= $escAmount ?> paid to StationeryMart
                 </p>
+                <div class="label">Merchant ID</div>
+                <div class="value"><?= $escMerchantId ?></div>
                 <div class="label">Reference</div>
-                <div class="value"><?= htmlspecialchars((string)$txn['reference_no']) ?></div>
+                <div class="value"><?= $escRefNo ?></div>
             <?php endif; ?>
 
             <p class="foot">
@@ -292,22 +310,23 @@ if ($qrId === '') {
                 automatically.
             </p>
 
-        <?php elseif ($txn && $txn['payment_state'] === 'Pending'): ?>
+        <?php elseif ($txn && ($txn['payment_state'] ?? '') === 'Pending'): ?>
 
             <div class="label">Pay to</div>
-            <div class="value">StationeryMart Sdn Bhd</div>
+            <div class="value">StationeryMart Sdn Bhd (<?= $escMerchantId ?>)</div>
 
             <div class="label">Reference</div>
-            <div class="value"><?= htmlspecialchars((string)$txn['order_ref']) ?></div>
+            <div class="value"><?= $escOrderRef ?></div>
 
             <div class="label">Amount due</div>
-            <div class="amount">RM <?= number_format((float)$txn['amount'], 2) ?></div>
+            <div class="amount">RM <?= $escAmount ?></div>
 
             <form method="post"
                   action="bank-app.php?qr_id=<?= urlencode($qrId) ?>">
+                <input type="hidden" name="qr_id" value="<?= $escQrIdAttr ?>">
                 <div class="label">Account holder</div>
                 <input class="field" type="text" name="payer_name"
-                       value="Bank Siber Customer" maxlength="100" required>
+                       value="<?= $escPayerInput ?>" maxlength="100" required>
 
                 <input type="hidden" name="action" value="confirm">
                 <button class="btn pay" type="submit">Confirm Payment</button>
@@ -315,6 +334,7 @@ if ($qrId === '') {
 
             <form method="post"
                   action="bank-app.php?qr_id=<?= urlencode($qrId) ?>">
+                <input type="hidden" name="qr_id" value="<?= $escQrIdAttr ?>">
                 <input type="hidden" name="action" value="cancel">
                 <button class="btn quiet" type="submit">Cancel</button>
             </form>
