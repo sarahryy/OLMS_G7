@@ -8,10 +8,9 @@ require_once __DIR__ . '/cart-service.php';
 /**
  * Create an order, its items, COD payment and shipping record.
  */
-function createOrderFromCart($userId, $shippingAddress)
+function createOrderFromCart($userId, $shippingAddress, $paymentMethod = 'Cash on Delivery')
 {
     $conn = getConnection();
-
     try {
         $cart = getCart();
 
@@ -75,8 +74,8 @@ function createOrderFromCart($userId, $shippingAddress)
 
         $itemStmt->close();
 
-        // 3. Save the COD payment.
-        $paymentMethod = 'Cash on Delivery';
+ // 3. Save the payment record. The method is chosen at checkout;
+        //    both methods start as Pending and are settled separately.
         $paymentStatus = 'Pending';
 
         $paymentStmt = $conn->prepare(
@@ -203,9 +202,17 @@ function cancelCustomerOrder($orderId, $userId)
         $shippingStmt->bind_param('i', $orderId);
         $shippingStmt->execute();
         $shippingStmt->close();
+
+        return [
+            'success' => true,
+            'message' => 'Order cancelled successfully.'
+        ];
     }
 
-    return $success;
+    return [
+        'success' => false,
+        'message' => 'This order can no longer be cancelled.'
+    ];
 }
 
 
@@ -273,7 +280,10 @@ function updateOrderStatus($orderId, $newStatus)
     ];
 
     if (!in_array($newStatus, $allowedStatuses, true)) {
-        return false;
+        return [
+            'success' => false,
+            'message' => 'That is not a valid order status.'
+        ];
     }
 
     $conn = getConnection();
@@ -286,7 +296,17 @@ function updateOrderStatus($orderId, $newStatus)
 
     $stmt->close();
 
-    return $success;
+    if ($success) {
+        return [
+            'success' => true,
+            'message' => "Order #{$orderId} updated to {$newStatus}."
+        ];
+    }
+
+    return [
+        'success' => false,
+        'message' => "Order #{$orderId} could not be updated."
+    ];
 }
 
 
@@ -302,11 +322,18 @@ function updateShippingStatus($orderId, $shippingStatus, $trackingNumber = '')
 
     $trackingNumber = trim($trackingNumber);
 
-    if (
-        !in_array($shippingStatus, $allowedStatuses, true) ||
-        strlen($trackingNumber) > 100
-    ) {
-        return false;
+    if (!in_array($shippingStatus, $allowedStatuses, true)) {
+        return [
+            'success' => false,
+            'message' => 'That is not a valid shipping status.'
+        ];
+    }
+
+    if (strlen($trackingNumber) > 100) {
+        return [
+            'success' => false,
+            'message' => 'Tracking number must be 100 characters or fewer.'
+        ];
     }
 
     $conn = getConnection();
@@ -341,7 +368,12 @@ function updateShippingStatus($orderId, $shippingStatus, $trackingNumber = '')
         $success = $update->execute();
         $update->close();
 
-        return $success;
+        return [
+            'success' => $success,
+            'message' => $success
+                ? "Shipping details for order #{$orderId} updated."
+                : "Shipping details for order #{$orderId} could not be updated."
+        ];
     }
 
     // If a shipping record is missing, create it using the order address.
@@ -355,7 +387,10 @@ function updateShippingStatus($orderId, $shippingStatus, $trackingNumber = '')
     $addressStmt->close();
 
     if (!$order) {
-        return false;
+        return [
+            'success' => false,
+            'message' => "Order #{$orderId} could not be found."
+        ];
     }
 
     $address = $order['shipping_address'];
@@ -375,5 +410,10 @@ function updateShippingStatus($orderId, $shippingStatus, $trackingNumber = '')
     $success = $insert->execute();
     $insert->close();
 
-    return $success;
+    return [
+        'success' => $success,
+        'message' => $success
+            ? "Shipping record created for order #{$orderId}."
+            : "Shipping record for order #{$orderId} could not be created."
+    ];
 }
