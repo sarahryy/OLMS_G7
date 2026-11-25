@@ -58,7 +58,6 @@ define('SIBER_API_PUBLIC', $scheme . '://' . $publicHost . SIBER_API_PATH);
 // request out to the internet and back in again, and where a development
 // PHP build often cannot verify the certificate on the way.
 define('SIBER_API_LOOPBACK', 'http://127.0.0.1' . SIBER_API_PATH);
-
 // The host name the loopback request claims to be for. Shared hosting
 // serves many sites from one address, so without this header the request
 // would reach the wrong virtual host.

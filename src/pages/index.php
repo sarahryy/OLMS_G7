@@ -18,7 +18,7 @@ if (!isset($_SESSION['userId'])) {
     header('Location: login.php');
 } elseif (($_SESSION['role'] ?? '') === 'admin') {
     // Administrators start at the product catalogue they maintain.
-    header('Location: product-list.php');
+       header('Location: admin-dashboard.php');
 } else {
     // Customers start at the catalogue they shop from.
     header('Location: product-list.php');

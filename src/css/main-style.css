@@ -564,3 +564,30 @@ body {
     margin-top: 2px;
 }
  
+/* Admin dashboard — cards laid out in a responsive grid */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 18px;
+    margin-top: 20px;
+}
+
+.dashboard-grid .card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.dashboard-grid .btn {
+    align-self: flex-start;
+    margin-top: auto;
+}
+
+/* Narrow text input used inside admin table cells */
+.cell-input {
+    width: 140px;
+    padding: 6px 8px;
+    border: 1px solid #b9bec7;
+    border-radius: 4px;
+}
+

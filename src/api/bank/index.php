@@ -20,6 +20,11 @@
  */
  
 declare(strict_types=1);
+// Never let a PHP warning, notice or fatal error reach the response body.
+// This endpoint must return JSON under every condition; a stray HTML error
+// page would be unparseable to the merchant's middleware.
+ini_set('display_errors', '0');
+error_reporting(E_ALL);
  
 require_once __DIR__ . '/bank-config.php';
 require_once __DIR__ . '/../../config/db-config.php';
@@ -107,6 +112,9 @@ try {
     respond(503, [
         'status'  => 'error',
         'code'    => 'BANK_UNAVAILABLE',
+        // Any unexpected failure below — a missing table, a malformed query, a PHP
+// error — is converted into a JSON response rather than an HTML error page.
+try {
         'message' => 'The payment service is temporarily unavailable.'
     ]);
 }
@@ -422,7 +430,16 @@ switch ($action) {
  
         respond(200, ['status' => 'ok', 'payment_state' => 'Cancelled']);
         break;
- 
+ } catch (Throwable $e) {
+    error_log('SiberQR API [' . $action . ']: ' . $e->getMessage());
+
+    respond(500, [
+        'status'  => 'error',
+        'code'    => 'BANK_INTERNAL_ERROR',
+        'message' => 'The payment service encountered an internal error. '
+                   . 'No payment has been taken.'
+    ]);
+}
     // --------------------------------------------------------------
     default:
         respond(404, [

@@ -1,40 +1,54 @@
 <?php
-session_start();
+/**
+ * File: manage-payments.php
+ * Module: Payment Administration
+ * Description: Lists every payment recorded against an order and lets an
+ *              administrator correct its status. Access control is handled
+ *              by the shared auth-guard middleware and the page is drawn
+ *              with the shared header and footer, so it behaves and looks
+ *              the same as every other administration screen.
+ *
+ * Author: Member 4
+ * Created: 14/11/2026
+ * Last Modified: 20/11/2026
+ */
 
+require_once __DIR__ . '/../includes/auth-guard.php';
 require_once __DIR__ . '/../config/db-config.php';
 
-if (!isset($_SESSION['userId'])) {
-    header('Location: login.php');
-    exit;
-}
+// Access control is delegated to the middleware rather than repeated here.
+requireAdmin();
 
-if (($_SESSION['role'] ?? '') !== 'admin') {
-    header('Location: order-history.php');
-    exit;
-}
-
-$conn = getConnection();
+$conn    = getConnection();
 $message = '';
+$isError = false;
+
+$allowedStatuses = ['Pending', 'Paid', 'Failed', 'Refunded'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $paymentId = (int)($_POST['payment_id'] ?? 0);
-    $status = $_POST['payment_status'] ?? '';
+    $status    = $_POST['payment_status'] ?? '';
 
-    $allowedStatuses = ['Pending', 'Paid', 'Failed', 'Refunded'];
-
+    // The status is checked against a defined list rather than accepted as
+    // submitted, so a crafted request cannot store a value the column does
+    // not allow.
     if ($paymentId > 0 && in_array($status, $allowedStatuses, true)) {
         $stmt = $conn->prepare(
             "UPDATE payments SET payment_status = ? WHERE payment_id = ?"
         );
         $stmt->bind_param('si', $status, $paymentId);
 
-        if ($stmt->execute() && $stmt->affected_rows >= 0) {
+        if ($stmt->execute()) {
             $message = 'Payment status updated.';
         } else {
-            $message = 'Unable to update payment status.';
+            $message = 'Unable to update the payment status.';
+            $isError = true;
         }
 
         $stmt->close();
+    } else {
+        $message = 'That payment reference or status was not recognised.';
+        $isError = true;
     }
 }
 
@@ -46,77 +60,67 @@ $sql = "SELECT p.payment_id, p.order_id, u.name AS customer_name,
         ORDER BY p.payment_id DESC";
 
 $result = $conn->query($sql);
+
+$pageTitle = 'Manage Payments';
+include __DIR__ . '/../includes/header.php';
 ?>
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Manage Payments - StationeryMart</title>
-    <link rel="stylesheet" href="../css/main-style.css">
-    <style>
-        .table-wrap { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
-        select, button { padding: 7px; }
-    </style>
-</head>
-<body>
-<div class="page-container">
-    <h1>Manage Payments</h1>
+<h1 class="page-title">Manage Payments</h1>
+<p class="page-subtitle">Every payment recorded against an order</p>
 
-    <p><a href="manage-orders.php">Back to Manage Orders</a></p>
-
-    <?php if ($message !== ''): ?>
-        <p><?= htmlspecialchars($message) ?></p>
-    <?php endif; ?>
-
-    <div class="table-wrap">
-    <table>
-        <thead>
-        <tr>
-            <th>Payment ID</th>
-            <th>Order ID</th>
-            <th>Customer</th>
-            <th>Amount</th>
-            <th>Method</th>
-            <th>Status</th>
-            <th>Update</th>
-        </tr>
-        </thead>
-        <tbody>
-        <?php if ($result && $result->num_rows > 0): ?>
-            <?php while ($row = $result->fetch_assoc()): ?>
-            <tr>
-                <td><?= (int)$row['payment_id'] ?></td>
-                <td><?= (int)$row['order_id'] ?></td>
-                <td><?= htmlspecialchars($row['customer_name']) ?></td>
-                <td>RM <?= number_format((float)$row['amount'], 2) ?></td>
-                <td><?= htmlspecialchars($row['payment_method']) ?></td>
-                <td><?= htmlspecialchars($row['payment_status']) ?></td>
-                <td>
-                    <form method="post">
-                        <input type="hidden" name="payment_id"
-                               value="<?= (int)$row['payment_id'] ?>">
-                        <select name="payment_status">
-                            <?php foreach (['Pending', 'Paid', 'Failed', 'Refunded'] as $status): ?>
-                                <option value="<?= $status ?>"
-                                    <?= $row['payment_status'] === $status ? 'selected' : '' ?>>
-                                    <?= $status ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <button type="submit">Save</button>
-                    </form>
-                </td>
-            </tr>
-            <?php endwhile; ?>
-        <?php else: ?>
-            <tr><td colspan="7">No payment records found.</td></tr>
-        <?php endif; ?>
-        </tbody>
-    </table>
+<?php if ($message !== ''): ?>
+    <div class="<?= $isError ? 'message-error' : 'message-success' ?>">
+        <?= htmlspecialchars($message) ?>
     </div>
-</div>
-</body>
-</html>
+<?php endif; ?>
+
+<table class="data-table">
+    <thead>
+    <tr>
+        <th>Payment ID</th>
+        <th>Order ID</th>
+        <th>Customer</th>
+        <th>Amount</th>
+        <th>Method</th>
+        <th>Status</th>
+        <th>Update</th>
+    </tr>
+    </thead>
+    <tbody>
+    <?php if ($result && $result->num_rows > 0): ?>
+        <?php while ($row = $result->fetch_assoc()): ?>
+        <tr>
+            <td><?= (int)$row['payment_id'] ?></td>
+            <td><?= (int)$row['order_id'] ?></td>
+            <td><?= htmlspecialchars($row['customer_name']) ?></td>
+            <td>RM <?= number_format((float)$row['amount'], 2) ?></td>
+            <td><?= htmlspecialchars($row['payment_method']) ?></td>
+            <td><?= htmlspecialchars($row['payment_status']) ?></td>
+            <td>
+                <form method="post" class="inline-form">
+                    <input type="hidden" name="payment_id"
+                           value="<?= (int)$row['payment_id'] ?>">
+
+                    <select name="payment_status">
+                        <?php foreach ($allowedStatuses as $status): ?>
+                            <option value="<?= $status ?>"
+                                <?= $row['payment_status'] === $status ? 'selected' : '' ?>>
+                                <?= $status ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+
+                    <button type="submit" class="btn btn-primary btn-small">Save</button>
+                </form>
+            </td>
+        </tr>
+        <?php endwhile; ?>
+    <?php else: ?>
+        <tr><td colspan="7">No payment records found.</td></tr>
+    <?php endif; ?>
+    </tbody>
+</table>
+
+<p><a class="link-back" href="admin-dashboard.php">Back to Dashboard</a></p>
+
+<?php include __DIR__ . '/../includes/footer.php'; ?>
